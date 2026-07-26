@@ -59,7 +59,7 @@ export const siteConfig = {
     "睡大觉中",
     "到底在干嘛？",
   ],
-  buildDate: "2025-10-27T00:00:00+08:00", // 稳定运行起算时间
+  buildDate: "2025-11-27T08:26:25+08:00", // 稳定运行起算时间
   footerBadges: [
     {
       name: "Next.js 16.2.1",
