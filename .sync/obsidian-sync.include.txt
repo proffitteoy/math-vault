@@ -175,3 +175,5 @@ ai/ManiMind/阶段四/Harness Engineering.md
 数学建模/读优秀论文杂记/二维守恒型方程的差分放缩.md
 数学建模/读优秀论文杂记/ARIMA-LSTM 混合时间序列模型.md
 math/Lp 范数收敛到无穷范数.md
+misc/修gudhi非对称bug杂记.md
+misc/CNN验证码识别杂记.md
