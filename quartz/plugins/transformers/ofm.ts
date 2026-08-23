@@ -27,6 +27,7 @@ import { toHast } from "mdast-util-to-hast"
 import { toHtml } from "hast-util-to-html"
 import { capitalize } from "../../util/lang"
 import { PluggableList } from "unified"
+import { attachBlockReference } from "./blockReferences"
 
 export interface Options {
   comments: boolean
@@ -590,10 +591,7 @@ export const ObsidianFlavoredMarkdown: QuartzTransformerPlugin<Partial<Options>>
                           idx -= 1
                         } else {
                           if (!Object.keys(file.data.blocks!).includes(block)) {
-                            element.properties = {
-                              ...element.properties,
-                              id: block,
-                            }
+                            attachBlockReference(element, block)
                             file.data.blocks![block] = element
                           }
                           return
