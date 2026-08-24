@@ -15,7 +15,7 @@ export const siteConfig = {
   navAfter: "宝藏之地",
 
   // 2. 头像设置 (支持网络链接，或将图片放入 public 文件夹后使用 "/me.jpg")
-  avatarUrl: "https://bu.dusays.com/2026/06/20/6a361fc5c68ff.jpg",
+  avatarUrl: "/avatar",
 
   // 3. 网站背景设置 (二选一)
   // 如果想用纯图片背景，请在下面 bgImage 写路径，并将 useGradient 设为 false
@@ -79,6 +79,6 @@ export const siteConfig = {
   ],
   friendLinkIssueUrl: "https://github.com/proffitteoy/math-vault/issues/new",
   friendLinkApplyFormat:
-    "名称：阿的宝藏之地\n简介：记录项目、数学思考与杂谈。\n链接：https://nothing-new.icu\n头像：https://bu.dusays.com/2026/06/20/6a361fc5c68ff.jpg",
+    "名称：阿的宝藏之地\n简介：记录项目、数学思考与杂谈。\n链接：https://nothing-new.icu\n头像：https://nothing-new.icu/avatar",
   enableLevelSystem: true,
 }

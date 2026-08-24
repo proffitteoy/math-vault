@@ -13,6 +13,27 @@ const nextConfig: NextConfig = {
       { source: "/posts/:path*", destination: "/legacy", permanent: false },
     ];
   },
+  async rewrites() {
+    return [
+      {
+        source: "/avatar",
+        destination: "/avatar.jpg",
+      },
+    ];
+  },
+  async headers() {
+    return [
+      {
+        source: "/avatar",
+        headers: [
+          {
+            key: "Cache-Control",
+            value: "public, max-age=3600, s-maxage=86400, stale-while-revalidate=604800",
+          },
+        ],
+      },
+    ];
+  },
   images: {
     unoptimized: true,
     remotePatterns: [
