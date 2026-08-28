@@ -1,10 +1,11 @@
 import "server-only"
 import { unstable_cache } from "next/cache"
+import { mergeAnimeEntries, normalizeAnimeRating, sortAnimeByRating } from "./collection"
 
 const BANGUMI_API_BASE = "https://api.bgm.tv/v0"
-const FIRST_SCREEN_LIMIT = 5
-const PAGE_SIZE = 10
+const BANGUMI_PAGE_SIZE = 50
 const CACHE_SECONDS = 30 * 60
+export const ANIME_PAGE_SIZE = 24
 
 export type AnimeShelfStatus = "watching" | "watched"
 
@@ -25,6 +26,7 @@ type BangumiSubject = {
 
 type BangumiCollection = {
   subject_id: number
+  rate?: number
   subject?: BangumiSubject
 }
 
@@ -43,6 +45,7 @@ export type AnimeEntry = {
   id: number
   title: string
   cover: string | null
+  rating: number | null
 }
 
 export type AnimeCollectionSlice = {
@@ -107,6 +110,7 @@ function toAnimeEntry(collection: BangumiCollection): AnimeEntry | null {
     id: subject.id || collection.subject_id,
     title,
     cover: normalizeCover(subject.images),
+    rating: normalizeAnimeRating(collection.rate),
   }
 }
 
@@ -119,52 +123,99 @@ async function getUsername(token: string) {
   return user.username
 }
 
-export async function getAnimeCollectionPage(
+async function fetchAnimeCollectionPage(
+  token: string,
+  username: string,
   status: AnimeShelfStatus,
   offset = 0,
-  limit = PAGE_SIZE,
-): Promise<AnimeCollectionSlice> {
-  const token = getToken()
-  const username = await getUsername(token)
-  const safeOffset = Math.max(0, Math.floor(offset))
-  const safeLimit = Math.min(50, Math.max(1, Math.floor(limit)))
+  limit = BANGUMI_PAGE_SIZE,
+) {
   const params = new URLSearchParams({
     subject_type: "2",
     type: String(getCollectionType(status)),
-    limit: String(safeLimit),
-    offset: String(safeOffset),
+    limit: String(limit),
+    offset: String(offset),
   })
-  const page = await bangumiFetch<BangumiCollectionPage>(
+  return bangumiFetch<BangumiCollectionPage>(
     `/users/${encodeURIComponent(username)}/collections?${params}`,
     token,
   )
+}
+
+async function getFullAnimeCollection(token: string, username: string, status: AnimeShelfStatus) {
+  const firstPage = await fetchAnimeCollectionPage(token, username, status)
+  const remainingOffsets = Array.from(
+    {
+      length: Math.max(0, Math.ceil((firstPage.total - firstPage.data.length) / BANGUMI_PAGE_SIZE)),
+    },
+    (_, index) => BANGUMI_PAGE_SIZE * (index + 1),
+  )
+  const remainingPages = await Promise.all(
+    remainingOffsets.map((offset) => fetchAnimeCollectionPage(token, username, status, offset)),
+  )
+  const entries = [firstPage, ...remainingPages]
+    .flatMap((page) => page.data)
+    .map(toAnimeEntry)
+    .filter((entry): entry is AnimeEntry => entry !== null)
+
+  const uniqueEntries = mergeAnimeEntries([], entries)
+  return status === "watched" ? sortAnimeByRating(uniqueEntries) : uniqueEntries
+}
+
+async function loadFullShelf() {
+  const token = getToken()
+  const username = await getUsername(token)
+  const [watching, watched] = await Promise.all([
+    getFullAnimeCollection(token, username, "watching"),
+    getFullAnimeCollection(token, username, "watched"),
+  ])
+
+  return { username, watching, watched }
+}
+
+const getCachedFullShelf = unstable_cache(loadFullShelf, ["bangumi-anime-full-shelf-v3"], {
+  revalidate: CACHE_SECONDS,
+  tags: ["bangumi-anime-full-shelf"],
+})
+
+export async function getAnimeCollectionPage(
+  status: AnimeShelfStatus,
+  offset = 0,
+  limit = ANIME_PAGE_SIZE,
+): Promise<AnimeCollectionSlice> {
+  const shelf = await getCachedFullShelf()
+  const items = shelf[status]
+  const safeOffset = Math.max(0, Math.floor(offset))
+  const safeLimit = Math.min(BANGUMI_PAGE_SIZE, Math.max(1, Math.floor(limit)))
+  const nextOffset = Math.min(items.length, safeOffset + safeLimit)
 
   return {
-    items: page.data.map(toAnimeEntry).filter((entry): entry is AnimeEntry => entry !== null),
-    total: page.total,
-    nextOffset: page.offset + page.data.length,
+    items: items.slice(safeOffset, nextOffset),
+    total: items.length,
+    nextOffset,
   }
 }
 
 async function loadFirstScreen() {
-  const token = getToken()
-  const username = await getUsername(token)
-  const [watching, watched] = await Promise.all([
-    getAnimeCollectionPage("watching", 0, FIRST_SCREEN_LIMIT),
-    getAnimeCollectionPage("watched", 0, FIRST_SCREEN_LIMIT),
-  ])
+  const shelf = await getCachedFullShelf()
+  const toFirstPage = (items: AnimeEntry[]): AnimeCollectionSlice => ({
+    items: items.slice(0, ANIME_PAGE_SIZE),
+    total: items.length,
+    nextOffset: Math.min(items.length, ANIME_PAGE_SIZE),
+  })
 
-  return { status: "ready" as const, username, watching, watched }
+  return {
+    status: "ready" as const,
+    username: shelf.username,
+    watching: toFirstPage(shelf.watching),
+    watched: toFirstPage(shelf.watched),
+  }
 }
 
-const getCachedFirstScreen = unstable_cache(
-  loadFirstScreen,
-  ["bangumi-anime-first-screen-v2"],
-  {
-    revalidate: CACHE_SECONDS,
-    tags: ["bangumi-anime-first-screen"],
-  },
-)
+const getCachedFirstScreen = unstable_cache(loadFirstScreen, ["bangumi-anime-first-screen-v3"], {
+  revalidate: CACHE_SECONDS,
+  tags: ["bangumi-anime-first-screen"],
+})
 
 export async function getAnimeShelf(): Promise<AnimeShelfState> {
   try {

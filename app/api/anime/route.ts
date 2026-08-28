@@ -1,10 +1,6 @@
 import { NextResponse } from "next/server"
-import {
-  getAnimeCollectionPage,
-  type AnimeShelfStatus,
-} from "../../anime/bangumi"
+import { ANIME_PAGE_SIZE, getAnimeCollectionPage, type AnimeShelfStatus } from "../../anime/bangumi"
 
-const PAGE_SIZE = 10
 const CACHE_SECONDS = 30 * 60
 
 function isShelfStatus(value: string | null): value is AnimeShelfStatus {
@@ -21,7 +17,7 @@ export async function GET(request: Request) {
   }
 
   try {
-    const page = await getAnimeCollectionPage(status, offsetValue, PAGE_SIZE)
+    const page = await getAnimeCollectionPage(status, offsetValue, ANIME_PAGE_SIZE)
     return NextResponse.json(page, {
       headers: {
         "Cache-Control": `public, s-maxage=${CACHE_SECONDS}, stale-while-revalidate=86400`,
