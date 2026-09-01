@@ -7,11 +7,13 @@ import { useToast } from "./ToastProvider"
 export default function ProfileCard({
   postCount,
   chatterCount,
-  photoCount,
+  musicCount,
+  animeCount,
 }: {
   postCount: number
   chatterCount: number
-  photoCount: number
+  musicCount: number
+  animeCount: number | null
 }) {
   const router = useRouter()
   const { showToast } = useToast()
@@ -50,17 +52,27 @@ export default function ProfileCard({
         </div>
       </div>
 
-      <div className="flex flex-col md:flex-row items-center md:items-end justify-between mt-6 md:mt-8 gap-5 md:gap-6 relative z-10">
-        <div className="flex gap-2 sm:gap-6 w-full md:w-auto justify-between sm:justify-around md:justify-start px-2 sm:px-0">
+      <div className="flex flex-col xl:flex-row items-center xl:items-end justify-between mt-6 md:mt-8 gap-5 md:gap-6 relative z-10">
+        <div className="grid grid-cols-4 w-full xl:max-w-[390px]">
           <StatItem count={postCount} label="博客" color="text-indigo-600 dark:text-indigo-400" />
-          <div className="w-px h-8 md:h-10 bg-slate-300/50 dark:bg-slate-700 hidden md:block"></div>
           <StatItem
             count={chatterCount}
             label="杂谈"
             color="text-purple-600 dark:text-purple-400"
+            divided
           />
-          <div className="w-px h-8 md:h-10 bg-slate-300/50 dark:bg-slate-700 hidden md:block"></div>
-          <StatItem count={photoCount} label="音乐" color="text-pink-600 dark:text-pink-400" />
+          <StatItem
+            count={musicCount}
+            label="音乐"
+            color="text-pink-600 dark:text-pink-400"
+            divided
+          />
+          <StatItem
+            count={animeCount}
+            label="番剧"
+            color="text-sky-600 dark:text-sky-300"
+            divided
+          />
         </div>
 
         <div
@@ -86,13 +98,25 @@ export default function ProfileCard({
   )
 }
 
-function StatItem({ count, label, color }: { count: number; label: string; color: string }) {
+function StatItem({
+  count,
+  label,
+  color,
+  divided = false,
+}: {
+  count: number | null
+  label: string
+  color: string
+  divided?: boolean
+}) {
   return (
-    <div className="text-center group/stat px-2">
+    <div
+      className={`text-center group/stat px-2 ${divided ? "border-l border-slate-300/50 dark:border-slate-700" : ""}`}
+    >
       <div
         className={`text-xl md:text-2xl font-black ${color} transition-transform group-hover/stat:scale-110`}
       >
-        {count}
+        {count ?? "—"}
       </div>
       <div className="text-[9px] md:text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest mt-0.5">
         {label}
