@@ -98,4 +98,12 @@ export const friendsData: Friend[] = [
     avatar: "https://blog.halfcity.top/assets/images/avatar.avif",
     themeColor: "rgba(43, 97, 22, 0.5)",
   },
+  {
+    id: "mibai",
+    name: "Yuki の Blog",
+    description: "记录代码、灵感和生活碎片的小小次元，欢迎来交换友链～",
+    avatar: "https://yukino-blog.site/assets/uploads/2026-07-01-illust-133225934-20260306-115848-cropped-4e8597f2.jpg",
+    url: "https://yukino-blog.site",
+    themeColor: "rgba(183, 196, 38, 0.5)",
+  },
 ]
