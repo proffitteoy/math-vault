@@ -23,7 +23,7 @@ export default async function NoteShell({ note }: { note: NoteArtifact }) {
   const manifest = await getNoteManifest()
 
   return (
-    <div className="note-native-shell relative isolate min-h-screen overflow-x-clip bg-[#ddd5c9] pb-20 text-[#2b251d] dark:bg-[#111317] dark:text-[#f2f4f7]">
+    <div className="note-native-shell relative isolate min-h-screen overflow-x-clip bg-transparent pb-20 text-[#2b251d] dark:text-[#f2f4f7]">
       <link rel="stylesheet" href="/quartz-assets/note.css" precedence="default" />
       <Navbar />
       <PageTransition>
