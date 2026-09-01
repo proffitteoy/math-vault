@@ -137,7 +137,7 @@ function ProjectCard({
         opacity: dimmed ? 0.68 : 1,
       }}
       transition={{ type: "spring", stiffness: 260, damping: 24, mass: 0.7 }}
-      className={`group relative isolate flex overflow-hidden rounded-[1.75rem] border border-white/55 bg-white/55 p-5 shadow-[0_18px_55px_-35px_rgba(15,23,42,0.45)] backdrop-blur-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 focus-visible:ring-offset-4 focus-visible:ring-offset-transparent dark:border-white/10 dark:bg-slate-900/55 sm:p-6 ${className}`}
+      className={`group relative isolate flex overflow-hidden rounded-[1.75rem] border border-slate-200/90 bg-white/90 p-5 shadow-[0_22px_60px_-36px_rgba(15,23,42,0.5)] backdrop-blur-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 focus-visible:ring-offset-4 focus-visible:ring-offset-transparent dark:border-white/10 dark:bg-slate-900/60 sm:p-6 ${className}`}
       style={{ transformPerspective: 900, transformStyle: "preserve-3d" }}
     >
       <div
@@ -156,7 +156,7 @@ function ProjectCard({
       <div className="flex w-full flex-col" style={{ transform: "translateZ(22px)" }}>
         <div className="flex items-start justify-between gap-4">
           <div
-            className="flex h-11 w-11 items-center justify-center rounded-2xl border border-white/70 bg-white/70 shadow-sm dark:border-white/10 dark:bg-slate-950/60"
+            className="flex h-11 w-11 items-center justify-center rounded-2xl border border-slate-200/90 bg-white shadow-sm dark:border-white/10 dark:bg-slate-950/60"
             style={{ color: `rgb(${project.accent})` }}
           >
             <Icon className="h-5 w-5" aria-hidden="true" />
@@ -176,7 +176,7 @@ function ProjectCard({
           >
             {project.name}
           </h3>
-          <p className="mt-3 max-w-xl text-sm font-medium leading-7 text-slate-600 dark:text-slate-300">
+          <p className="mt-3 max-w-xl text-sm font-medium leading-7 text-slate-700 dark:text-slate-300">
             {project.description}
           </p>
         </div>
@@ -184,7 +184,7 @@ function ProjectCard({
         <ul className="mt-auto flex flex-wrap gap-2 pt-8" aria-label={`${project.name} 标签`}>
           {project.tags.map((tag) => (
             <li
-              className="rounded-full border border-slate-200/80 bg-white/60 px-3 py-1.5 text-[11px] font-bold text-slate-600 dark:border-white/10 dark:bg-slate-950/45 dark:text-slate-300"
+              className="rounded-full border border-slate-200 bg-slate-50/95 px-3 py-1.5 text-[11px] font-bold text-slate-700 dark:border-white/10 dark:bg-slate-950/45 dark:text-slate-300"
               key={tag}
             >
               {tag}
@@ -200,10 +200,16 @@ export default function ProjectsBoard() {
   const [activeProject, setActiveProject] = useState<string | null>(null)
 
   return (
-    <main className="relative z-10 mx-auto w-full max-w-6xl px-4 py-8 sm:px-6 md:py-12 lg:px-10">
+    <main
+      className="relative z-10 mx-auto w-full max-w-6xl px-4 py-8 sm:px-6 md:py-12 lg:px-10"
+      style={{
+        fontFamily:
+          '"Avenir Next", "Segoe UI Variable", "PingFang SC", "Microsoft YaHei UI", sans-serif',
+      }}
+    >
       <BackButton />
 
-      <header className="relative overflow-hidden rounded-[2rem] border border-white/55 bg-white/50 p-6 shadow-[0_24px_70px_-42px_rgba(15,23,42,0.55)] backdrop-blur-xl dark:border-white/10 dark:bg-slate-900/55 md:p-9">
+      <header className="relative overflow-hidden rounded-[2rem] border border-slate-200/90 bg-white/90 p-6 shadow-[0_24px_70px_-40px_rgba(15,23,42,0.5)] backdrop-blur-xl dark:border-white/10 dark:bg-slate-900/60 md:p-9">
         <div
           aria-hidden="true"
           className="pointer-events-none absolute -right-20 -top-28 h-72 w-72 rounded-full bg-sky-400/15 blur-3xl"
@@ -216,7 +222,7 @@ export default function ProjectsBoard() {
             <h1 className="mt-3 text-4xl font-black tracking-[-0.055em] text-slate-950 dark:text-white md:text-5xl">
               项目档案
             </h1>
-            <p className="mt-4 text-sm font-medium leading-7 text-slate-600 dark:text-slate-300 sm:text-base">
+            <p className="mt-4 text-sm font-medium leading-7 text-slate-700 dark:text-slate-300 sm:text-base">
               从拓扑数据分析到本地研究工具，也记录进入成熟开源项目的真实协作。
             </p>
           </div>

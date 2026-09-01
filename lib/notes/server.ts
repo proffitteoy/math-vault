@@ -8,6 +8,16 @@ import type { NoteArtifact, NoteManifest, NoteSection } from "./types"
 
 const noteCacheRoot = path.join(process.cwd(), ".quartz-cache", "next")
 
+export function decodeNotePath(pathSegments: string[]) {
+  return pathSegments.map((segment) => {
+    try {
+      return decodeURIComponent(segment)
+    } catch {
+      return segment
+    }
+  })
+}
+
 async function readJson<T>(filePath: string): Promise<T> {
   return JSON.parse(await fs.readFile(filePath, "utf8")) as T
 }

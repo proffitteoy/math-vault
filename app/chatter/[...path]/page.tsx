@@ -2,6 +2,7 @@ import type { Metadata } from "next"
 
 import NoteRoutePage from "@/components/notes/NoteRoutePage"
 import {
+  decodeNotePath,
   getCanonicalRoute,
   getNoteByRoute,
   getStaticNoteParams,
@@ -21,7 +22,8 @@ export async function generateStaticParams() {
 
 export async function generateMetadata({ params }: ChatterNotePageProps): Promise<Metadata> {
   const { path } = await params
-  const route = `/chatter/${path.join("/")}`
+  const decodedPath = decodeNotePath(path)
+  const route = `/chatter/${decodedPath.join("/")}`
   const canonicalRoute = await getCanonicalRoute(route)
   const note = await getNoteByRoute(canonicalRoute)
   if (note) {
@@ -32,7 +34,7 @@ export async function generateMetadata({ params }: ChatterNotePageProps): Promis
     }
   }
   if (await isFolderRoute("chatter", route)) {
-    const title = path.at(-1) ?? "杂谈"
+    const title = decodedPath.at(-1) ?? "杂谈"
     return { title: `${title} | 杂谈 | ${siteConfig.title}` }
   }
   return { title: `未找到笔记 | ${siteConfig.title}` }

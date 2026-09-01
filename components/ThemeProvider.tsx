@@ -1,23 +1,79 @@
 "use client"
+
 import { createContext, useContext, useEffect, useState } from "react"
 
 const ThemeContext = createContext({ isDark: false, toggleTheme: () => {} })
+const THEME_KEY = "blog-theme"
+const OVERRIDE_UNTIL_KEY = "blog-theme-override-until"
+
+function shouldUseDarkTheme(date: Date) {
+  const hour = date.getHours()
+  return hour >= 18 || hour < 6
+}
+
+function getNextThemeBoundary(date: Date) {
+  const boundary = new Date(date)
+  boundary.setMinutes(0, 0, 0)
+
+  if (date.getHours() < 6) {
+    boundary.setHours(6)
+  } else if (date.getHours() < 18) {
+    boundary.setHours(18)
+  } else {
+    boundary.setDate(boundary.getDate() + 1)
+    boundary.setHours(6)
+  }
+
+  return boundary
+}
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
-  // 默认日间模式；用户手动切换后仍然尊重本地保存的偏好
   const [isDark, setIsDark] = useState(false)
 
   useEffect(() => {
-    // 从 localStorage 读取真实状态
-    const savedTheme = localStorage.getItem("blog-theme")
-    // 如果没有记录，默认保持日间模式
-    const isDarkMode = savedTheme === "dark"
-    const timeoutId = window.setTimeout(() => setIsDark(isDarkMode), 0)
+    let boundaryTimer = 0
 
-    return () => window.clearTimeout(timeoutId)
+    const applyCurrentTheme = () => {
+      const now = new Date()
+      const savedTheme = localStorage.getItem(THEME_KEY)
+      const overrideUntil = Number(localStorage.getItem(OVERRIDE_UNTIL_KEY))
+      const hasActiveOverride =
+        (savedTheme === "dark" || savedTheme === "light") && overrideUntil > now.getTime()
+
+      if (!hasActiveOverride) {
+        localStorage.removeItem(THEME_KEY)
+        localStorage.removeItem(OVERRIDE_UNTIL_KEY)
+      }
+
+      setIsDark(hasActiveOverride ? savedTheme === "dark" : shouldUseDarkTheme(now))
+    }
+
+    const scheduleNextBoundary = () => {
+      const now = new Date()
+      const delay = getNextThemeBoundary(now).getTime() - now.getTime() + 100
+      boundaryTimer = window.setTimeout(() => {
+        localStorage.removeItem(THEME_KEY)
+        localStorage.removeItem(OVERRIDE_UNTIL_KEY)
+        applyCurrentTheme()
+        scheduleNextBoundary()
+      }, delay)
+    }
+
+    const initializationTimer = window.setTimeout(applyCurrentTheme, 0)
+    scheduleNextBoundary()
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") applyCurrentTheme()
+    }
+    document.addEventListener("visibilitychange", handleVisibilityChange)
+
+    return () => {
+      window.clearTimeout(initializationTimer)
+      window.clearTimeout(boundaryTimer)
+      document.removeEventListener("visibilitychange", handleVisibilityChange)
+    }
   }, [])
 
-  // 极其重要：监听 isDark 状态，只要它变了，立刻强制更新 html 标签，防止路由切换丢失
   useEffect(() => {
     const root = document.documentElement
     if (isDark) {
@@ -30,7 +86,8 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const toggleTheme = () => {
     const newDark = !isDark
     setIsDark(newDark)
-    localStorage.setItem("blog-theme", newDark ? "dark" : "light")
+    localStorage.setItem(THEME_KEY, newDark ? "dark" : "light")
+    localStorage.setItem(OVERRIDE_UNTIL_KEY, String(getNextThemeBoundary(new Date()).getTime()))
   }
 
   return <ThemeContext.Provider value={{ isDark, toggleTheme }}>{children}</ThemeContext.Provider>

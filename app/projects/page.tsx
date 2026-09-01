@@ -10,7 +10,11 @@ export const metadata = {
 
 export default function ProjectsPage() {
   return (
-    <div className="min-h-screen relative pb-20">
+    <div className="relative min-h-screen pb-20">
+      <div
+        aria-hidden="true"
+        className="pointer-events-none fixed inset-0 z-0 bg-slate-100/70 backdrop-blur-[2px] dark:bg-slate-950/15 dark:backdrop-blur-none"
+      />
       <Navbar />
       <PageTransition>
         <div className="pt-16 md:pt-16">

@@ -1,6 +1,7 @@
 import { notFound, permanentRedirect } from "next/navigation"
 
 import {
+  decodeNotePath,
   getCanonicalRoute,
   getFolderNotes,
   getNoteByRoute,
@@ -17,7 +18,8 @@ export default async function NoteRoutePage({
   section: NoteSection
   path: string[]
 }) {
-  const route = `/${section}/${path.join("/")}`
+  const decodedPath = decodeNotePath(path)
+  const route = `/${section}/${decodedPath.join("/")}`
   const canonicalRoute = await getCanonicalRoute(route)
   if (canonicalRoute !== route) permanentRedirect(canonicalRoute)
 
@@ -26,7 +28,7 @@ export default async function NoteRoutePage({
 
   if (await isFolderRoute(section, route)) {
     const notes = await getFolderNotes(section, route)
-    const title = path.at(-1) ?? (section === "blog" ? "博客" : "杂谈")
+    const title = decodedPath.at(-1) ?? (section === "blog" ? "博客" : "杂谈")
     return (
       <NoteCollectionPage
         section={section}

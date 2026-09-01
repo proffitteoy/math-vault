@@ -48,6 +48,23 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
             `
           }}
         />
+        <script
+          suppressHydrationWarning
+          dangerouslySetInnerHTML={{
+            __html: `
+              try {
+                var themeNow = new Date();
+                var savedTheme = localStorage.getItem('blog-theme');
+                var overrideUntil = Number(localStorage.getItem('blog-theme-override-until'));
+                var scheduledDark = themeNow.getHours() >= 18 || themeNow.getHours() < 6;
+                var hasThemeOverride = (savedTheme === 'dark' || savedTheme === 'light') && overrideUntil > themeNow.getTime();
+                if (hasThemeOverride ? savedTheme === 'dark' : scheduledDark) {
+                  document.documentElement.classList.add('dark');
+                }
+              } catch (e) {}
+            `
+          }}
+        />
       </head>
 
       <body className="w-screen overflow-x-hidden min-h-full flex flex-col relative transition-colors duration-1000 bg-slate-50 dark:bg-slate-950 font-serif">
