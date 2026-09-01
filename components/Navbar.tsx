@@ -87,7 +87,7 @@ export default function Navbar() {
     { name: '音乐', href: '/music' },
     { name: '番剧', href: '/anime' },
     { name: '杂谈', href: '/chatter' },
-    { name: '博客', href: '/legacy' },
+    { name: '博客', href: '/blog' },
     { name: '友链', href: '/friends' },
     { name: '关于', href: '/about' },
   ];
@@ -108,7 +108,7 @@ export default function Navbar() {
           <nav className="flex gap-8 text-sm font-bold">
             {/* PC端依然使用全量的 navLinks */}
             {navLinks.map((link) => {
-              const isActive = pathname === link.href || pathname === `${link.href}/`;
+              const isActive = pathname === link.href || pathname.startsWith(`${link.href}/`);
               return (
                 <Link key={link.href} href={link.href} aria-current={isActive ? 'page' : undefined} className={`relative py-1 transition-colors ${isActive ? 'text-indigo-600 dark:text-indigo-400' : 'text-slate-700 dark:text-slate-200 hover:text-indigo-600'}`}>
                   {link.name}
@@ -184,7 +184,7 @@ export default function Navbar() {
 
                   {/* 🌟 手机端轮盘渲染：使用过滤后的 mobileNavLinks */}
                   {mobileNavLinks.map((link, index) => {
-                    const isActive = pathname === link.href || pathname === `${link.href}/`;
+                    const isActive = pathname === link.href || pathname.startsWith(`${link.href}/`);
                     // 🌟 角度计算也会基于过滤后的长度，保证图标自动均匀排布！
                     const angle = index * (360 / mobileNavLinks.length);
 
