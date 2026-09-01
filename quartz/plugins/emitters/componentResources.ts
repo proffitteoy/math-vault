@@ -21,10 +21,46 @@ import { write } from "./helpers"
 import fs from "fs"
 import path from "path"
 import { createRequire } from "module"
+import { parse } from "postcss"
 
 const require = createRequire(import.meta.url)
 const katexCssPath = require.resolve("katex/dist/katex.min.css")
 const katexFontDir = path.join(path.dirname(katexCssPath), "fonts")
+const publicQuartzRoot = path.join(process.cwd(), "public", "quartz-assets")
+
+function scopeSelector(selector: string): string {
+  const trimmed = selector.trim()
+  const darkTheme = /saved-theme=["']?dark/.test(trimmed)
+  const lightTheme = /saved-theme=["']?light/.test(trimmed)
+  const themeRoot = trimmed.match(/^(?::root|html)(?:\[[^\]]*saved-theme[^\]]*\])?/)
+
+  if (themeRoot) {
+    const remainder = trimmed
+      .slice(themeRoot[0].length)
+      .trim()
+      .replace(/^body\b/, "")
+      .trim()
+    const scope = darkTheme ? ".dark .quartz-note" : ".quartz-note"
+    return remainder ? `${scope} ${remainder}` : scope
+  }
+
+  if (trimmed === "html" || trimmed === "body") return ".quartz-note"
+  if (trimmed.startsWith("html ") || trimmed.startsWith("body ")) {
+    return trimmed.replace(/^(?:html|body)\b/, ".quartz-note")
+  }
+  if (trimmed.startsWith(".page")) return `.quartz-note${trimmed}`
+  if (lightTheme) return `.quartz-note ${trimmed}`
+  return `.quartz-note ${trimmed}`
+}
+
+function scopeQuartzStyles(stylesheet: string): string {
+  const root = parse(stylesheet)
+  root.walkRules((rule) => {
+    if (rule.parent?.type === "atrule" && /keyframes$/i.test(rule.parent.name)) return
+    rule.selectors = rule.selectors.map(scopeSelector)
+  })
+  return root.toString()
+}
 
 type ComponentResources = {
   css: string[]
@@ -344,13 +380,10 @@ export const ComponentResources: QuartzEmitterPlugin = () => {
         joinScripts(componentResources.afterDOMLoaded),
       ])
 
-      yield write({
-        ctx,
-        slug: "index" as FullSlug,
-        ext: ".css",
-        content: transform({
-          filename: "index.css",
-          code: Buffer.from(stylesheet),
+      const compileStyles = (source: string, filename: string) =>
+        transform({
+          filename,
+          code: Buffer.from(source),
           minify: true,
           targets: {
             safari: (15 << 16) | (6 << 8), // 15.6
@@ -360,16 +393,32 @@ export const ComponentResources: QuartzEmitterPlugin = () => {
             chrome: 109 << 16,
           },
           include: Features.MediaQueries,
-        }).code.toString(),
+        }).code.toString()
+
+      yield write({
+        ctx,
+        slug: "index" as FullSlug,
+        ext: ".css",
+        content: compileStyles(stylesheet, "index.css"),
       })
 
+      await fs.promises.mkdir(publicQuartzRoot, { recursive: true })
+      await fs.promises.writeFile(
+        path.join(publicQuartzRoot, "note.css"),
+        compileStyles(scopeQuartzStyles(stylesheet), "note.css"),
+      )
+
       for (const fontFile of await fs.promises.readdir(katexFontDir)) {
+        const fontContent = await fs.promises.readFile(path.join(katexFontDir, fontFile))
         yield write({
           ctx,
           slug: joinSegments("fonts", fontFile) as FullSlug,
           ext: "",
-          content: await fs.promises.readFile(path.join(katexFontDir, fontFile)),
+          content: fontContent,
         })
+        const publicFontPath = path.join(publicQuartzRoot, "fonts", fontFile)
+        await fs.promises.mkdir(path.dirname(publicFontPath), { recursive: true })
+        await fs.promises.writeFile(publicFontPath, fontContent)
       }
 
       yield write({

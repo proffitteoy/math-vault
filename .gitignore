@@ -2,6 +2,7 @@
 node_modules
 /.next
 /public/blog
+/public/quartz-assets
 /public.backup-*
 /site/
 /site/public/blog

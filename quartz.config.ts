@@ -78,6 +78,7 @@ const config: QuartzConfig = {
         enableSiteMap: true,
         enableRSS: true,
       }),
+      Plugin.NextContentArtifacts(),
       Plugin.Assets(),
       Plugin.Static(),
       Plugin.Favicon(),
