@@ -1,15 +1,15 @@
 {
   "name": "personal-blog",
-  "description": "Personal blog powered by Next.js and original Quartz rendering",
+  "description": "Personal website for projects, notes, music, and long-form knowledge",
   "private": true,
-  "version": "4.5.2",
+  "version": "0.1.0",
   "type": "module",
-  "author": "jackyzha0 <j.zhao2k19@gmail.com>",
+  "author": "proffitteoy",
   "license": "GPL-3.0-only",
-  "homepage": "https://quartz.jzhao.xyz",
+  "homepage": "https://nothing-new.icu",
   "repository": {
     "type": "git",
-    "url": "https://github.com/jackyzha0/quartz.git"
+    "url": "https://github.com/proffitteoy/math-vault.git"
   },
   "scripts": {
     "quartz": "./quartz/bootstrap-cli.mjs",
@@ -43,12 +43,8 @@
     "ssg",
     "digital-garden",
     "markdown",
-    "blog",
-    "quartz"
+    "blog"
   ],
-  "bin": {
-    "quartz": "./quartz/bootstrap-cli.mjs"
-  },
   "dependencies": {
     "@clack/prompts": "^0.11.0",
     "@floating-ui/dom": "^1.7.4",

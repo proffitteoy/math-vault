@@ -11,7 +11,9 @@ export const metadata: Metadata = {
 
 export default async function BlogPage() {
   const notes = await getSectionNotes("blog")
-  const firstNote = notes[0]
+  const firstNote =
+    notes.find((note) => note.route === "/blog/math/切比雪夫不等式") ??
+    notes.find((note) => note.text.trim().length >= 300)
   if (!firstNote) notFound()
   redirect(encodeURI(firstNote.route))
 }

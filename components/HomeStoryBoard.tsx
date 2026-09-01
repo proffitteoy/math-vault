@@ -4,13 +4,7 @@ import Image from "next/image"
 import Link from "next/link"
 import { useState } from "react"
 import { motion, useReducedMotion } from "framer-motion"
-import {
-  ArrowUpRight,
-  ChevronLeft,
-  ChevronRight,
-  Clapperboard,
-  FolderGit2,
-} from "lucide-react"
+import { ArrowUpRight, ChevronLeft, ChevronRight, Clapperboard, FolderGit2 } from "lucide-react"
 
 import type { AnimeShelfState } from "../app/anime/bangumi"
 import { siteConfig } from "../siteConfig"
@@ -195,7 +189,11 @@ export default function HomeStoryBoard({ animeShelf }: { animeShelf: AnimeShelfS
                     animate={shouldScrollCovers ? { x: ["0%", "-50%"] } : undefined}
                     transition={
                       shouldScrollCovers
-                        ? { duration: Math.max(16, covers.length * 2.8), ease: "linear", repeat: Infinity }
+                        ? {
+                            duration: Math.max(16, covers.length * 2.8),
+                            ease: "linear",
+                            repeat: Infinity,
+                          }
                         : undefined
                     }
                   >

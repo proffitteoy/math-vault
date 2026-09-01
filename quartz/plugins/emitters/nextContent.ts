@@ -286,6 +286,10 @@ export const NextContentArtifacts: QuartzEmitterPlugin = () => ({
       )
       const searchPath = path.join(artifactRoot, manifest.search[section])
       await writeJson(searchPath, searchRecords[section])
+      await writeJson(
+        path.join("public", "quartz-assets", "search", `${section}.json`),
+        searchRecords[section],
+      )
       yield searchPath as FilePath
     }
 

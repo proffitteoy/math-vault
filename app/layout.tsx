@@ -1,18 +1,18 @@
-import 'katex/dist/katex.min.css';
-import type { Metadata } from "next";
-import "./globals.css";
-import { ThemeProvider } from "../components/ThemeProvider";
-import BackgroundEffects from "../components/BackgroundEffects";
-import { MusicProvider } from "../components/MusicProvider";
-import FloatingPlayer from "../components/FloatingPlayer";
-import { siteConfig } from "../siteConfig";
-import ClickEffect from "../components/ClickEffect";
-import BackgroundSlider from "../components/BackgroundSlider";
-import SplashScreen from "../components/SplashScreen";
-import DanmakuBackground from '../components/DanmakuBackground';
-import BlogWarmup from "../components/BlogWarmup";
+import "katex/dist/katex.min.css"
+import type { Metadata } from "next"
+import "./globals.css"
+import { ThemeProvider } from "../components/ThemeProvider"
+import BackgroundEffects from "../components/BackgroundEffects"
+import { MusicProvider } from "../components/MusicProvider"
+import FloatingPlayer from "../components/FloatingPlayer"
+import { siteConfig } from "../siteConfig"
+import ClickEffect from "../components/ClickEffect"
+import BackgroundSlider from "../components/BackgroundSlider"
+import SplashScreen from "../components/SplashScreen"
+import DanmakuBackground from "../components/DanmakuBackground"
+import BlogWarmup from "../components/BlogWarmup"
 
-import MobileBackButton from '../components/MobileBackButton';
+import MobileBackButton from "../components/MobileBackButton"
 
 export const metadata: Metadata = {
   title: siteConfig.title,
@@ -21,7 +21,7 @@ export const metadata: Metadata = {
     icon: siteConfig.faviconUrl,
     apple: siteConfig.faviconUrl,
   },
-};
+}
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
@@ -33,7 +33,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
             __html: `
               #app-mount-root { opacity: 0; visibility: hidden; pointer-events: none; }
               html.splash-seen #app-mount-root { opacity: 1 !important; visibility: visible !important; pointer-events: auto !important; }
-            `
+            `,
           }}
         />
         <script
@@ -45,7 +45,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
                   document.documentElement.classList.add('splash-seen');
                 }
               } catch (e) {}
-            `
+            `,
           }}
         />
         <script
@@ -62,19 +62,21 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
                   document.documentElement.classList.add('dark');
                 }
               } catch (e) {}
-            `
+            `,
           }}
         />
       </head>
 
       <body className="w-screen overflow-x-hidden min-h-full flex flex-col relative transition-colors duration-1000 bg-slate-50 dark:bg-slate-950 font-serif">
         <ThemeProvider>
-
           <SplashScreen />
 
           <MusicProvider>
             <BlogWarmup />
-            <div id="app-mount-root" className="flex-1 flex flex-col transition-opacity duration-1000">
+            <div
+              id="app-mount-root"
+              className="flex-1 flex flex-col transition-opacity duration-1000"
+            >
               <div className="fixed inset-0 z-[-1] pointer-events-none overflow-hidden">
                 {!siteConfig.useGradient && <BackgroundSlider />}
                 <div className="absolute inset-0 z-[-9] bg-white/30 dark:bg-slate-900/40 backdrop-blur-md transition-colors duration-1000"></div>
@@ -82,9 +84,9 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
                 <div
                   className="absolute inset-0 z-[-8] opacity-60 dark:opacity-20 mix-blend-color transition-opacity duration-1000 transform-gpu"
                   style={{
-                    background: `linear-gradient(-45deg, ${siteConfig.themeColors.join(', ')})`,
-                    backgroundSize: '400% 400%',
-                    animation: 'gradientMove 15s ease infinite' // 🌟 全端保留渐变流动
+                    background: `linear-gradient(-45deg, ${siteConfig.themeColors.join(", ")})`,
+                    backgroundSize: "400% 400%",
+                    animation: "gradientMove 15s ease infinite", // 🌟 全端保留渐变流动
                   }}
                 ></div>
 
@@ -103,9 +105,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
                 <DanmakuBackground />
               </div>
 
-              <div className="relative z-10 flex-1 flex flex-col">
-                {children}
-              </div>
+              <div className="relative z-10 flex-1 flex flex-col">{children}</div>
 
               <div className="hidden md:block">
                 <FloatingPlayer />
@@ -121,16 +121,21 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
               </div>
             </div>
 
-            <style suppressHydrationWarning dangerouslySetInnerHTML={{ __html: `
+            <style
+              suppressHydrationWarning
+              dangerouslySetInnerHTML={{
+                __html: `
               @keyframes gradientMove { 
                 0% { background-position: 0% 50%; } 
                 50% { background-position: 100% 50%; } 
                 100% { background-position: 0% 50%; } 
               }
-            `}} />
+            `,
+              }}
+            />
           </MusicProvider>
         </ThemeProvider>
       </body>
     </html>
-  );
+  )
 }

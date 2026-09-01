@@ -1,9 +1,11 @@
 import Link from "next/link"
-import { ArrowLeft, CalendarDays, CornerUpLeft, Hash, Link2 } from "lucide-react"
+import { CalendarDays, CornerUpLeft, Hash, Link2 } from "lucide-react"
 
+import { getNoteManifest } from "@/lib/notes/server"
 import type { NoteArtifact } from "@/lib/notes/types"
 import Navbar from "../Navbar"
 import PageTransition from "../PageTransition"
+import NoteExplorer from "./NoteExplorer"
 
 function formatDate(value?: string) {
   if (!value) return null
@@ -14,41 +16,30 @@ function formatDate(value?: string) {
   }).format(new Date(value))
 }
 
-export default function NoteShell({ note }: { note: NoteArtifact }) {
+export default async function NoteShell({ note }: { note: NoteArtifact }) {
   const sectionTitle = note.section === "blog" ? "博客" : "杂谈"
   const sectionRoute = `/${note.section}`
   const displayDate = formatDate(note.dates.modified ?? note.dates.created)
+  const manifest = await getNoteManifest()
 
   return (
-    <div className="relative min-h-screen pb-20">
+    <div className="note-native-shell relative isolate min-h-screen overflow-x-clip bg-[#ddd5c9] pb-20 text-[#2b251d] dark:bg-[#111317] dark:text-[#f2f4f7]">
       <link rel="stylesheet" href="/quartz-assets/note.css" precedence="default" />
       <Navbar />
       <PageTransition>
-        <main className="mx-auto grid w-full max-w-[92rem] grid-cols-1 gap-6 px-4 pt-24 sm:px-6 lg:grid-cols-[14rem_minmax(0,50rem)] lg:px-8 xl:grid-cols-[15rem_minmax(0,52rem)_15rem]">
-          <aside className="hidden lg:block" aria-label={`${sectionTitle}导航`}>
-            <div className="sticky top-24 rounded-3xl border border-white/50 bg-white/45 p-5 shadow-lg backdrop-blur-xl dark:border-white/10 dark:bg-slate-900/50">
-              <Link
-                href={sectionRoute}
-                className="inline-flex items-center gap-2 text-sm font-black text-sky-700 transition-colors hover:text-sky-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 dark:text-sky-300"
-              >
-                <ArrowLeft className="h-4 w-4" aria-hidden="true" />
-                返回{sectionTitle}
-              </Link>
-              <p className="mt-5 text-[10px] font-black tracking-[0.24em] text-slate-400">
-                NOTE FIRST
-              </p>
-              <p className="mt-2 text-sm font-medium leading-6 text-slate-600 dark:text-slate-300">
-                正文由 Quartz 完成增强，页面导航与生命周期由主站接管。
-              </p>
-            </div>
-          </aside>
+        <main className="mx-auto grid w-full max-w-[94rem] grid-cols-1 gap-5 px-4 pt-24 sm:px-6 lg:grid-cols-[16rem_minmax(0,1fr)] lg:gap-6 lg:px-8 xl:grid-cols-[17rem_minmax(0,1fr)_15rem]">
+          <NoteExplorer
+            section={note.section}
+            tree={manifest.trees[note.section]}
+            currentPath={note.route}
+          />
 
-          <section className="min-w-0">
-            <header className="mb-5 rounded-[2rem] border border-white/55 bg-white/55 p-6 shadow-[0_24px_70px_-46px_rgba(15,23,42,0.55)] backdrop-blur-xl dark:border-white/10 dark:bg-slate-900/55 sm:p-8">
-              <div className="flex flex-wrap items-center gap-2 text-[11px] font-bold text-slate-500 dark:text-slate-400">
+          <section className="min-w-0 max-w-full overflow-hidden">
+            <header className="mb-5 rounded-2xl border border-[#c7beb0] bg-[#f3f0ea] p-6 shadow-[0_20px_55px_-42px_rgba(43,37,29,0.65)] dark:border-[#343a44] dark:bg-[#1a1c20] sm:p-8">
+              <div className="flex flex-wrap items-center gap-2 text-[11px] font-bold text-[#8f8578] dark:text-[#7f8998]">
                 <Link
                   href={sectionRoute}
-                  className="rounded-full bg-sky-500/10 px-3 py-1.5 text-sky-700 hover:bg-sky-500/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 dark:text-sky-300"
+                  className="rounded-full bg-[#3d5a80]/10 px-3 py-1.5 text-[#3d5a80] hover:bg-[#3d5a80]/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#3d5a80] dark:bg-[#9ab5d8]/10 dark:text-[#9ab5d8] dark:hover:bg-[#9ab5d8]/15 dark:focus-visible:ring-[#9ab5d8]"
                 >
                   {sectionTitle}
                 </Link>
@@ -59,11 +50,11 @@ export default function NoteShell({ note }: { note: NoteArtifact }) {
                   </span>
                 )}
               </div>
-              <h1 className="mt-5 break-words text-3xl font-black leading-tight tracking-[-0.045em] text-slate-950 dark:text-white sm:text-4xl">
+              <h1 className="mt-5 break-words font-serif text-3xl font-black leading-tight tracking-[-0.035em] text-[#2b251d] dark:text-[#f2f4f7] sm:text-4xl">
                 {note.title}
               </h1>
               {note.description && (
-                <p className="mt-4 max-w-3xl text-sm font-medium leading-7 text-slate-600 dark:text-slate-300">
+                <p className="mt-4 max-w-3xl text-sm font-medium leading-7 text-[#665d52] dark:text-[#aeb5c0]">
                   {note.description}
                 </p>
               )}
@@ -72,7 +63,7 @@ export default function NoteShell({ note }: { note: NoteArtifact }) {
                   {note.tags.map((tag) => (
                     <li
                       key={tag}
-                      className="inline-flex items-center gap-1 rounded-full border border-slate-200/80 bg-white/65 px-3 py-1.5 text-[11px] font-bold text-slate-600 dark:border-white/10 dark:bg-slate-950/45 dark:text-slate-300"
+                      className="inline-flex items-center gap-1 rounded-full border border-[#c7beb0] bg-[#ebe5dc] px-3 py-1.5 text-[11px] font-bold text-[#665d52] dark:border-[#343a44] dark:bg-[#111317] dark:text-[#aeb5c0]"
                     >
                       <Hash className="h-3 w-3" aria-hidden="true" />
                       {tag}
@@ -83,8 +74,8 @@ export default function NoteShell({ note }: { note: NoteArtifact }) {
             </header>
 
             {note.toc.length > 0 && (
-              <details className="mb-5 rounded-2xl border border-white/50 bg-white/45 p-4 text-sm shadow-sm backdrop-blur lg:hidden dark:border-white/10 dark:bg-slate-900/45">
-                <summary className="cursor-pointer font-black text-slate-800 dark:text-slate-100">
+              <details className="mb-5 rounded-xl border border-[#c7beb0] bg-[#f3f0ea] p-4 text-sm shadow-sm lg:hidden dark:border-[#343a44] dark:bg-[#1a1c20]">
+                <summary className="cursor-pointer font-black text-[#2b251d] dark:text-[#f2f4f7]">
                   本页目录
                 </summary>
                 <ol className="mt-3 space-y-2 pl-4">
@@ -94,7 +85,7 @@ export default function NoteShell({ note }: { note: NoteArtifact }) {
                       style={{ paddingLeft: entry.depth * 12 }}
                     >
                       <a
-                        className="text-slate-600 hover:text-sky-600 dark:text-slate-300"
+                        className="text-[#665d52] hover:text-[#3d5a80] dark:text-[#aeb5c0] dark:hover:text-[#9ab5d8]"
                         href={`#${entry.slug}`}
                       >
                         {entry.text}
@@ -105,25 +96,28 @@ export default function NoteShell({ note }: { note: NoteArtifact }) {
               </details>
             )}
 
-            <div className="quartz-note page rounded-[2rem] border border-white/55 bg-white/70 p-5 shadow-[0_30px_80px_-52px_rgba(15,23,42,0.6)] backdrop-blur-xl dark:border-white/10 dark:bg-slate-900/70 sm:p-8 md:p-10">
+            <div className="quartz-note page min-h-0 min-w-0 !max-w-full overflow-hidden rounded-2xl border border-[#c7beb0] bg-[#f3f0ea] p-5 shadow-[0_24px_62px_-44px_rgba(43,37,29,0.68)] dark:border-[#343a44] dark:bg-[#1a1c20] sm:p-8 md:p-10">
               <article
                 id="main-content"
-                className="popover-hint"
+                className="popover-hint min-w-0 max-w-full overflow-x-hidden [overflow-wrap:anywhere] [&_.katex-display]:max-w-full [&_.katex-display]:overflow-x-auto [&_.table-container]:max-w-full [&_.table-container]:overflow-x-auto [&_pre]:max-w-full [&_pre]:overflow-x-auto"
                 dangerouslySetInnerHTML={{ __html: note.html }}
               />
             </div>
 
             {note.backlinks.length > 0 && (
-              <section className="mt-5 rounded-3xl border border-white/50 bg-white/45 p-5 backdrop-blur-xl xl:hidden dark:border-white/10 dark:bg-slate-900/45">
-                <h2 className="flex items-center gap-2 text-sm font-black text-slate-900 dark:text-white">
-                  <CornerUpLeft className="h-4 w-4 text-sky-500" aria-hidden="true" />
+              <section className="mt-5 rounded-2xl border border-[#c7beb0] bg-[#f3f0ea] p-5 xl:hidden dark:border-[#343a44] dark:bg-[#1a1c20]">
+                <h2 className="flex items-center gap-2 text-sm font-black text-[#2b251d] dark:text-[#f2f4f7]">
+                  <CornerUpLeft
+                    className="h-4 w-4 text-[#3d5a80] dark:text-[#9ab5d8]"
+                    aria-hidden="true"
+                  />
                   反向链接
                 </h2>
                 <ul className="mt-3 space-y-2">
                   {note.backlinks.map((backlink) => (
                     <li key={backlink.route}>
                       <Link
-                        className="text-sm text-slate-600 hover:text-sky-600 dark:text-slate-300"
+                        className="text-sm text-[#665d52] hover:text-[#3d5a80] dark:text-[#aeb5c0] dark:hover:text-[#9ab5d8]"
                         href={backlink.route}
                       >
                         {backlink.title}
@@ -138,9 +132,12 @@ export default function NoteShell({ note }: { note: NoteArtifact }) {
           <aside className="hidden xl:block" aria-label="笔记辅助信息">
             <div className="sticky top-24 space-y-4">
               {note.toc.length > 0 && (
-                <nav className="rounded-3xl border border-white/50 bg-white/45 p-5 shadow-lg backdrop-blur-xl dark:border-white/10 dark:bg-slate-900/50">
-                  <h2 className="flex items-center gap-2 text-sm font-black text-slate-900 dark:text-white">
-                    <Link2 className="h-4 w-4 text-sky-500" aria-hidden="true" />
+                <nav className="rounded-2xl border border-[#c7beb0] bg-[#f3f0ea] p-5 shadow-[0_14px_38px_-28px_rgba(43,37,29,0.55)] dark:border-[#343a44] dark:bg-[#1a1c20]">
+                  <h2 className="flex items-center gap-2 text-sm font-black text-[#2b251d] dark:text-[#f2f4f7]">
+                    <Link2
+                      className="h-4 w-4 text-[#3d5a80] dark:text-[#9ab5d8]"
+                      aria-hidden="true"
+                    />
                     本页目录
                   </h2>
                   <ol className="mt-4 max-h-[45vh] space-y-2 overflow-y-auto pr-1">
@@ -150,7 +147,7 @@ export default function NoteShell({ note }: { note: NoteArtifact }) {
                         style={{ paddingLeft: entry.depth * 10 }}
                       >
                         <a
-                          className="text-xs leading-5 text-slate-500 hover:text-sky-600 dark:text-slate-400"
+                          className="text-xs leading-5 text-[#665d52] hover:text-[#3d5a80] dark:text-[#aeb5c0] dark:hover:text-[#9ab5d8]"
                           href={`#${entry.slug}`}
                         >
                           {entry.text}
@@ -161,9 +158,12 @@ export default function NoteShell({ note }: { note: NoteArtifact }) {
                 </nav>
               )}
 
-              <section className="rounded-3xl border border-white/50 bg-white/45 p-5 shadow-lg backdrop-blur-xl dark:border-white/10 dark:bg-slate-900/50">
-                <h2 className="flex items-center gap-2 text-sm font-black text-slate-900 dark:text-white">
-                  <CornerUpLeft className="h-4 w-4 text-sky-500" aria-hidden="true" />
+              <section className="rounded-2xl border border-[#c7beb0] bg-[#f3f0ea] p-5 shadow-[0_14px_38px_-28px_rgba(43,37,29,0.55)] dark:border-[#343a44] dark:bg-[#1a1c20]">
+                <h2 className="flex items-center gap-2 text-sm font-black text-[#2b251d] dark:text-[#f2f4f7]">
+                  <CornerUpLeft
+                    className="h-4 w-4 text-[#3d5a80] dark:text-[#9ab5d8]"
+                    aria-hidden="true"
+                  />
                   反向链接
                 </h2>
                 {note.backlinks.length > 0 ? (
@@ -171,7 +171,7 @@ export default function NoteShell({ note }: { note: NoteArtifact }) {
                     {note.backlinks.map((backlink) => (
                       <li key={backlink.route}>
                         <Link
-                          className="text-xs leading-5 text-slate-500 hover:text-sky-600 dark:text-slate-400"
+                          className="text-xs leading-5 text-[#665d52] hover:text-[#3d5a80] dark:text-[#aeb5c0] dark:hover:text-[#9ab5d8]"
                           href={backlink.route}
                         >
                           {backlink.title}
@@ -180,7 +180,9 @@ export default function NoteShell({ note }: { note: NoteArtifact }) {
                     ))}
                   </ul>
                 ) : (
-                  <p className="mt-3 text-xs leading-5 text-slate-400">暂无其他笔记链接到这里。</p>
+                  <p className="mt-3 text-xs leading-5 text-[#8f8578] dark:text-[#7f8998]">
+                    暂无其他笔记链接到这里。
+                  </p>
                 )}
               </section>
             </div>

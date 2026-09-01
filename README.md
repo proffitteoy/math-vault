@@ -2,7 +2,7 @@
 
 一个持续演化的个人站点：把项目作品、音乐收藏、随笔和数学知识库放在同一套体验中。
 
-它不再只是 Obsidian 笔记的发布出口，而是由 **Next.js 主站、Quartz 静态知识库、音乐播放器与内容同步工具**共同组成的开源个人网站。
+它不再只是笔记的发布出口，而是由 **Next.js 主站、静态知识库、音乐播放器与内容同步工具**共同组成的开源个人网站。
 
 <p align="center">
   <a href="https://nothing-new.icu"><img alt="在线站点" src="https://img.shields.io/badge/在线站点-nothing--new.icu-5b5bf7?style=flat-square"></a>
@@ -18,7 +18,7 @@
 - **沉浸式视觉体验**：玻璃拟态卡片、动态背景、主题切换、樱花与粒子等可配置效果。
 - **全局音乐体验**：网易云歌单、歌词、播放队列和跨页面悬浮播放器。
 - **结构化项目展示**：通过本地数据维护项目卡片、标签和仓库入口。
-- **Quartz 知识库**：支持全文搜索、目录、数学公式、双向链接与 Markdown 内容发布。
+- **静态知识库**：支持全文搜索、目录、数学公式、双向链接与 Markdown 内容发布。
 - **可选 Obsidian 工作流**：可以从外部 Vault 审阅并同步公开笔记，也可以直接维护 `content/`，使用站点本身不依赖 Obsidian。
 
 ## 页面预览
@@ -26,7 +26,7 @@
 | 项目                                                                       | 音乐                                                                    |
 | -------------------------------------------------------------------------- | ----------------------------------------------------------------------- |
 | <img src="./docs/images/readme/projects.webp" alt="项目页面" width="100%"> | <img src="./docs/images/readme/music.webp" alt="音乐页面" width="100%"> |
-| **Quartz 博客与数学知识库**                                                | **首页与全局播放器**                                                    |
+| **博客与数学知识库**                                                       | **首页与全局播放器**                                                    |
 | <img src="./docs/images/readme/blog.webp" alt="博客页面" width="100%">     | <img src="./docs/images/readme/home.webp" alt="首页页面" width="100%">  |
 
 ## 技术栈
@@ -35,7 +35,7 @@
 | ---------- | -------------------------------------------------- |
 | Web 应用   | Next.js 16、React 19、TypeScript、Tailwind CSS 4   |
 | 交互与视觉 | Framer Motion、Three.js、React Three Fiber、PixiJS |
-| 内容系统   | Quartz、Markdown、KaTeX、Shiki、FlexSearch         |
+| 内容系统   | Markdown、KaTeX、Shiki、FlexSearch                 |
 | 编辑与数据 | Tiptap、本地 TypeScript 数据文件                   |
 | 工程化     | ESLint、Prettier、Docker、Vercel                   |
 
@@ -55,21 +55,21 @@ npm ci
 npm run dev
 ```
 
-浏览器访问 <http://localhost:3000>。启动前会先把 `content/` 构建为 `public/blog/` 下的 Quartz 静态站点，因此首次运行会比普通 Next.js 项目稍慢。
+浏览器访问 <http://localhost:3000>。启动前会先构建 `content/` 中的静态内容，因此首次运行会比普通 Next.js 项目稍慢。
 
 ## 常用命令
 
-| 命令                        | 作用                                      |
-| --------------------------- | ----------------------------------------- |
-| `npm run dev`               | 构建 Quartz 内容并启动 Next.js 开发服务器 |
-| `npm run build`             | 生成 Quartz 站点并执行生产构建            |
-| `npm run start`             | 启动已完成构建的生产服务器                |
-| `npm run lint`              | 执行 ESLint 检查                          |
-| `npm run typecheck`         | 执行 TypeScript 类型检查                  |
-| `npm test`                  | 运行测试                                  |
-| `npm run quartz:build:site` | 只生成 `public/blog/` 静态知识库          |
-| `npm run sync:obsidian:dry` | 预览 Obsidian 同步结果，不写入文件        |
-| `npm run sync:obsidian`     | 审阅并同步获准公开的笔记                  |
+| 命令                        | 作用                                  |
+| --------------------------- | ------------------------------------- |
+| `npm run dev`               | 构建笔记内容并启动 Next.js 开发服务器 |
+| `npm run build`             | 生成静态内容并执行生产构建            |
+| `npm run start`             | 启动已完成构建的生产服务器            |
+| `npm run lint`              | 执行 ESLint 检查                      |
+| `npm run typecheck`         | 执行 TypeScript 类型检查              |
+| `npm test`                  | 运行测试                              |
+| `npm run notes:build`       | 只生成静态知识库内容                  |
+| `npm run sync:obsidian:dry` | 预览 Obsidian 同步结果，不写入文件    |
+| `npm run sync:obsidian`     | 审阅并同步获准公开的笔记              |
 
 ## 内容与配置
 
@@ -78,8 +78,7 @@ npm run dev
 - 项目、友链等结构化数据：`data/`
 - Next.js 页面与接口：`app/`
 - 通用 UI 与播放器组件：`components/`
-- Quartz 博客与公开知识库内容：`content/`
-- Quartz 配置与布局：`quartz.config.ts`、`quartz.layout.ts`
+- 博客与公开知识库内容：`content/`
 - 自动化与 Obsidian 同步：`scripts/`、`obsidian-sync.config.mjs`
 
 `public/blog/` 是构建产物，请不要手动修改。若采用 Obsidian 写作，请先阅读[同步说明](./docs/project/obsidian-sync.md)；不使用 Obsidian 时，直接维护 `content/` 即可。
@@ -90,20 +89,18 @@ npm run dev
 .
 ├── app/                    # Next.js App Router 页面与 API
 ├── components/             # 主站组件、视觉效果与音乐播放器
-├── content/                # Quartz 博客和知识库源内容
+├── content/                # 博客和知识库源内容
 ├── data/                   # 项目、友链等站点数据
 ├── docs/project/           # 本仓库专属维护文档
 ├── public/                 # 公共资源与生成后的博客站点
-├── quartz/                 # Quartz 引擎
 ├── scripts/                # 同步和维护脚本
 ├── siteConfig.ts           # 全站配置中心
-├── quartz.config.ts        # Quartz 内容配置
-└── quartz.layout.ts        # Quartz 页面布局
+└── obsidian-sync.config.mjs # 内容同步配置
 ```
 
 ## 部署
 
-推荐直接使用 Vercel 部署：导入仓库后将 **Root Directory 保持为仓库根目录**，构建命令使用 `npm run build`。该命令会先生成 Quartz 静态站点，再构建 Next.js 主站。
+推荐直接使用 Vercel 部署：导入仓库后将 **Root Directory 保持为仓库根目录**，构建命令使用 `npm run build`。该命令会先生成静态内容，再构建 Next.js 主站。
 
 也可以使用仓库中的 `Dockerfile` 自行构建镜像。
 
@@ -136,4 +133,4 @@ npm.cmd run dev
 
 本仓库整体统一采用 [GNU General Public License v3.0](./LICENSE.txt)。第三方代码和素材仍保留各自的版权与署名要求，详情见[第三方代码与授权说明](./docs/project/third-party-notices.md)。
 
-感谢 [Next.js](https://nextjs.org/)、[Quartz](https://quartz.jzhao.xyz/) 及所有开源依赖与内容工具的维护者。
+第三方代码的来源、许可证与署名集中记录在[第三方代码与授权说明](./docs/project/third-party-notices.md)中。
