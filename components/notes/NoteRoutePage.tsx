@@ -28,7 +28,7 @@ export default async function NoteRoutePage({
 
   if (await isFolderRoute(section, route)) {
     const notes = await getFolderNotes(section, route)
-    const title = decodedPath.at(-1) ?? (section === "blog" ? "博客" : "杂谈")
+    const title = decodedPath.at(-1) ?? (section === "blog" ? "笔记" : "杂谈")
     return (
       <NoteCollectionPage
         section={section}

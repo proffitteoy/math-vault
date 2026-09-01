@@ -1,120 +1,139 @@
-"use client";
+"use client"
 
-import Link from 'next/link';
-import { useState, useEffect, useRef } from 'react';
-import { usePathname } from 'next/navigation';
-import { motion, AnimatePresence, useMotionValue, useSpring, useTransform, PanInfo } from 'framer-motion';
-import { siteConfig } from '../siteConfig';
+import Link from "next/link"
+import { useState, useEffect, useRef } from "react"
+import { usePathname } from "next/navigation"
+import {
+  motion,
+  AnimatePresence,
+  useMotionValue,
+  useSpring,
+  useTransform,
+  PanInfo,
+} from "framer-motion"
+import { siteConfig } from "../siteConfig"
 
 const getMobileDragConstraints = () => {
-  if (typeof window === 'undefined') {
-    return { top: 0, bottom: 0 };
+  if (typeof window === "undefined") {
+    return { top: 0, bottom: 0 }
   }
 
-  const vh = window.innerHeight;
+  const vh = window.innerHeight
   return {
     top: -(vh / 2) + 80,
-    bottom: (vh / 2) - 80
-  };
-};
+    bottom: vh / 2 - 80,
+  }
+}
 
 export default function Navbar() {
-  const [showNav, setShowNav] = useState(true);
-  const [lastScrollY, setLastScrollY] = useState(0);
-  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-  const pathname = usePathname();
+  const [showNav, setShowNav] = useState(true)
+  const [lastScrollY, setLastScrollY] = useState(0)
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
+  const pathname = usePathname()
 
   // --- 🌟 物理引擎：菜单转动逻辑 ---
-  const wheelRef = useRef<HTMLDivElement>(null);
-  const rawRotation = useMotionValue(0);
-  const smoothRotation = useSpring(rawRotation, { stiffness: 200, damping: 25 });
-  const inverseRotation = useTransform(smoothRotation, (r) => -r);
+  const wheelRef = useRef<HTMLDivElement>(null)
+  const rawRotation = useMotionValue(0)
+  const smoothRotation = useSpring(rawRotation, { stiffness: 200, damping: 25 })
+  const inverseRotation = useTransform(smoothRotation, (r) => -r)
 
   const handlePan = (_event: MouseEvent | TouchEvent | PointerEvent, info: PanInfo) => {
-    if (!wheelRef.current) return;
-    const rect = wheelRef.current.getBoundingClientRect();
-    const centerX = rect.left + rect.width / 2;
-    const centerY = rect.top + rect.height / 2;
-    const currX = info.point.x;
-    const currY = info.point.y;
-    const prevX = currX - info.delta.x;
-    const prevY = currY - info.delta.y;
-    const prevAngle = Math.atan2(prevY - centerY, prevX - centerX);
-    const currAngle = Math.atan2(currY - centerY, currX - centerX);
-    let deltaAngle = (currAngle - prevAngle) * (180 / Math.PI);
-    if (deltaAngle > 180) deltaAngle -= 360;
-    if (deltaAngle < -180) deltaAngle += 360;
-    rawRotation.set(rawRotation.get() + deltaAngle);
-  };
+    if (!wheelRef.current) return
+    const rect = wheelRef.current.getBoundingClientRect()
+    const centerX = rect.left + rect.width / 2
+    const centerY = rect.top + rect.height / 2
+    const currX = info.point.x
+    const currY = info.point.y
+    const prevX = currX - info.delta.x
+    const prevY = currY - info.delta.y
+    const prevAngle = Math.atan2(prevY - centerY, prevX - centerX)
+    const currAngle = Math.atan2(currY - centerY, currX - centerX)
+    let deltaAngle = (currAngle - prevAngle) * (180 / Math.PI)
+    if (deltaAngle > 180) deltaAngle -= 360
+    if (deltaAngle < -180) deltaAngle += 360
+    rawRotation.set(rawRotation.get() + deltaAngle)
+  }
 
   // --- 🌟 物理引擎：手机端按钮拖拽逻辑 ---
-  const dragY = useMotionValue(0);
-  const [constraints] = useState(getMobileDragConstraints);
+  const dragY = useMotionValue(0)
+  const [constraints] = useState(getMobileDragConstraints)
 
   useEffect(() => {
-    if (isMobileMenuOpen) rawRotation.set(0);
-  }, [isMobileMenuOpen, rawRotation]);
+    if (isMobileMenuOpen) rawRotation.set(0)
+  }, [isMobileMenuOpen, rawRotation])
 
   useEffect(() => {
-    if (!isMobileMenuOpen) return;
+    if (!isMobileMenuOpen) return
 
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') setIsMobileMenuOpen(false);
-    };
+      if (event.key === "Escape") setIsMobileMenuOpen(false)
+    }
 
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isMobileMenuOpen]);
+    window.addEventListener("keydown", handleKeyDown)
+    return () => window.removeEventListener("keydown", handleKeyDown)
+  }, [isMobileMenuOpen])
 
   // 控制 PC 端导航栏
   useEffect(() => {
     const handleScroll = () => {
-      const currentScrollY = window.scrollY;
+      const currentScrollY = window.scrollY
       if (currentScrollY > lastScrollY && currentScrollY > 80) {
-        setShowNav(false);
+        setShowNav(false)
       } else {
-        setShowNav(true);
+        setShowNav(true)
       }
-      setLastScrollY(currentScrollY);
-    };
-    window.addEventListener('scroll', handleScroll, { passive: true });
-    return () => window.removeEventListener('scroll', handleScroll);
-  }, [lastScrollY]);
+      setLastScrollY(currentScrollY)
+    }
+    window.addEventListener("scroll", handleScroll, { passive: true })
+    return () => window.removeEventListener("scroll", handleScroll)
+  }, [lastScrollY])
 
   const navLinks = [
-    { name: '首页', href: '/' },
-    { name: '项目', href: '/projects' },
-    { name: '音乐', href: '/music' },
-    { name: '番剧', href: '/anime' },
-    { name: '杂谈', href: '/chatter' },
-    { name: '博客', href: '/blog' },
-    { name: '友链', href: '/friends' },
-    { name: '关于', href: '/about' },
-  ];
+    { name: "首页", href: "/" },
+    { name: "项目", href: "/projects" },
+    { name: "音乐", href: "/music" },
+    { name: "番剧", href: "/anime" },
+    { name: "杂谈", href: "/chatter" },
+    { name: "笔记", href: "/blog" },
+    { name: "友链", href: "/friends" },
+    { name: "关于", href: "/about" },
+  ]
 
   // 🌟 手机端使用同一份链接，圆盘会基于实际长度均匀排布
-  const mobileNavLinks = navLinks;
+  const mobileNavLinks = navLinks
 
   return (
     <>
       {/* PC端导航栏 */}
-      <header className={`hidden md:block w-full fixed top-0 left-0 right-0 z-50 transition-all duration-500 border-b ${showNav ? 'translate-y-0' : '-translate-y-full'} bg-white/40 dark:bg-slate-900/50 backdrop-blur-xl border-white/20 dark:border-white/5 shadow-sm`}>
+      <header
+        className={`hidden md:block w-full fixed top-0 left-0 right-0 z-50 transition-all duration-500 border-b ${showNav ? "translate-y-0" : "-translate-y-full"} bg-white/40 dark:bg-slate-900/50 backdrop-blur-xl border-white/20 dark:border-white/5 shadow-sm`}
+      >
         <div className="w-[90%] max-w-6xl mx-auto h-16 flex items-center justify-between px-4 sm:px-[30px] box-border">
-          <Link href="/" className="text-xl font-black text-slate-800 dark:text-white tracking-tighter hover:text-indigo-600 dark:hover:text-indigo-400 transition-all duration-300">
+          <Link
+            href="/"
+            className="text-xl font-black text-slate-800 dark:text-white tracking-tighter hover:text-indigo-600 dark:hover:text-indigo-400 transition-all duration-300"
+          >
             {siteConfig.navTitle || siteConfig.authorName}
-            <span className="text-indigo-500 mx-1">{siteConfig.navSuffix || 'の'}</span>
-            {siteConfig.navAfter || '宝藏之地'}
+            <span className="text-indigo-500 mx-1">{siteConfig.navSuffix || "の"}</span>
+            {siteConfig.navAfter || "宝藏之地"}
           </Link>
           <nav className="flex gap-8 text-sm font-bold">
             {/* PC端依然使用全量的 navLinks */}
             {navLinks.map((link) => {
-              const isActive = pathname === link.href || pathname.startsWith(`${link.href}/`);
+              const isActive = pathname === link.href || pathname.startsWith(`${link.href}/`)
               return (
-                <Link key={link.href} href={link.href} aria-current={isActive ? 'page' : undefined} className={`relative py-1 transition-colors ${isActive ? 'text-indigo-600 dark:text-indigo-400' : 'text-slate-700 dark:text-slate-200 hover:text-indigo-600'}`}>
+                <Link
+                  key={link.href}
+                  href={link.href}
+                  aria-current={isActive ? "page" : undefined}
+                  className={`relative py-1 transition-colors ${isActive ? "text-indigo-600 dark:text-indigo-400" : "text-slate-700 dark:text-slate-200 hover:text-indigo-600"}`}
+                >
                   {link.name}
-                  {isActive && <span className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-1 h-1 bg-indigo-500 rounded-full animate-pulse"></span>}
+                  {isActive && (
+                    <span className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-1 h-1 bg-indigo-500 rounded-full animate-pulse"></span>
+                  )}
                 </Link>
-              );
+              )
             })}
           </nav>
         </div>
@@ -134,10 +153,10 @@ export default function Navbar() {
           style={{ y: dragY }}
           onClick={() => {
             if (Math.abs(dragY.getVelocity()) < 10) {
-              setIsMobileMenuOpen(true);
+              setIsMobileMenuOpen(true)
             }
           }}
-          className={`fixed top-1/2 right-0 -translate-y-1/2 w-12 h-28 bg-indigo-500/80 backdrop-blur-xl rounded-l-full shadow-[-5px_0_20px_rgba(99,102,241,0.4)] z-[60] flex items-center justify-center transition-all duration-500 border-y border-l border-white/30 touch-none ${isMobileMenuOpen ? 'translate-x-full opacity-0 pointer-events-none' : 'translate-x-0 opacity-100'}`}
+          className={`fixed top-1/2 right-0 -translate-y-1/2 w-12 h-28 bg-indigo-500/80 backdrop-blur-xl rounded-l-full shadow-[-5px_0_20px_rgba(99,102,241,0.4)] z-[60] flex items-center justify-center transition-all duration-500 border-y border-l border-white/30 touch-none ${isMobileMenuOpen ? "translate-x-full opacity-0 pointer-events-none" : "translate-x-0 opacity-100"}`}
         >
           <div className="flex flex-col gap-1.5 items-center justify-center mr-2">
             <div className="w-1.5 h-1.5 bg-white/90 rounded-full"></div>
@@ -163,7 +182,7 @@ export default function Navbar() {
                 initial={{ scale: 0.5, opacity: 0, rotate: -90 }}
                 animate={{ scale: 1, opacity: 1, rotate: 0 }}
                 exit={{ scale: 0.5, opacity: 0, rotate: 90 }}
-                transition={{ type: 'spring', damping: 20, stiffness: 150 }}
+                transition={{ type: "spring", damping: 20, stiffness: 150 }}
                 id="mobile-nav-wheel"
                 role="dialog"
                 aria-modal="true"
@@ -177,41 +196,46 @@ export default function Navbar() {
                   className="w-full h-full rounded-full border border-white/30 dark:border-slate-500/50 bg-white/40 dark:bg-slate-800/50 backdrop-blur-3xl shadow-[0_0_50px_rgba(0,0,0,0.3)] pointer-events-auto relative cursor-grab active:cursor-grabbing"
                 >
                   <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-20 h-20 rounded-full bg-slate-100 dark:bg-slate-700 border-4 border-slate-300 dark:border-slate-500 flex items-center justify-center shadow-inner z-10">
-                    <button type="button" aria-label="关闭导航" onClick={() => setIsMobileMenuOpen(false)} className="w-12 h-12 rounded-full bg-indigo-500 flex items-center justify-center text-white font-black shadow-lg hover:bg-red-500 hover:rotate-90 transition-all duration-300 active:scale-95">
+                    <button
+                      type="button"
+                      aria-label="关闭导航"
+                      onClick={() => setIsMobileMenuOpen(false)}
+                      className="w-12 h-12 rounded-full bg-indigo-500 flex items-center justify-center text-white font-black shadow-lg hover:bg-red-500 hover:rotate-90 transition-all duration-300 active:scale-95"
+                    >
                       <span aria-hidden="true">✕</span>
                     </button>
                   </div>
 
                   {/* 🌟 手机端轮盘渲染：使用过滤后的 mobileNavLinks */}
                   {mobileNavLinks.map((link, index) => {
-                    const isActive = pathname === link.href || pathname.startsWith(`${link.href}/`);
+                    const isActive = pathname === link.href || pathname.startsWith(`${link.href}/`)
                     // 🌟 角度计算也会基于过滤后的长度，保证图标自动均匀排布！
-                    const angle = index * (360 / mobileNavLinks.length);
+                    const angle = index * (360 / mobileNavLinks.length)
 
                     return (
                       <div
                         key={link.href}
                         className="absolute top-1/2 left-1/2 w-14 h-14 -ml-7 -mt-7 flex items-center justify-center"
                         style={{
-                          transform: `rotate(${angle}deg) translateY(-115px) rotate(${-angle}deg)`
+                          transform: `rotate(${angle}deg) translateY(-115px) rotate(${-angle}deg)`,
                         }}
                       >
                         <motion.div style={{ rotate: inverseRotation }} className="w-full h-full">
                           <Link
                             href={link.href}
                             onClick={() => setIsMobileMenuOpen(false)}
-                            aria-current={isActive ? 'page' : undefined}
+                            aria-current={isActive ? "page" : undefined}
                             className={`flex items-center justify-center w-full h-full rounded-full transition-all duration-300 ${
-                              isActive 
-                                ? 'bg-indigo-500 text-white shadow-[0_0_15px_rgba(99,102,241,0.8)] scale-110' 
-                                : 'bg-white/90 dark:bg-slate-800 text-slate-800 dark:text-slate-200 shadow-md hover:scale-110 border border-white/50 dark:border-slate-600'
+                              isActive
+                                ? "bg-indigo-500 text-white shadow-[0_0_15px_rgba(99,102,241,0.8)] scale-110"
+                                : "bg-white/90 dark:bg-slate-800 text-slate-800 dark:text-slate-200 shadow-md hover:scale-110 border border-white/50 dark:border-slate-600"
                             }`}
                           >
                             <span className="text-[11px] font-black">{link.name}</span>
                           </Link>
                         </motion.div>
                       </div>
-                    );
+                    )
                   })}
                 </motion.div>
               </motion.div>
@@ -220,5 +244,5 @@ export default function Navbar() {
         </AnimatePresence>
       </div>
     </>
-  );
+  )
 }

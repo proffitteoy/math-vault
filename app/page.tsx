@@ -10,7 +10,6 @@ import SiteDashboard from "../components/SiteDashboard"
 import LyricBar from "../components/LyricBar"
 import HomeStoryBoard from "../components/HomeStoryBoard"
 import { ToastProvider } from "../components/ToastProvider"
-import { getAnimeShelf } from "./anime/bangumi"
 
 function countQuartzPages(directory: string) {
   if (!fs.existsSync(directory)) return 0
@@ -32,14 +31,11 @@ function countQuartzPages(directory: string) {
   return total
 }
 
-export default async function Home() {
+export default function Home() {
   const quartzBlogDir = path.join(process.cwd(), "public", "blog")
   const quartzMiscDir = path.join(quartzBlogDir, "misc")
   const chatterCount = countQuartzPages(quartzMiscDir)
   const blogCount = Math.max(0, countQuartzPages(quartzBlogDir) - chatterCount)
-  const animeShelf = await getAnimeShelf()
-  const animeCount =
-    animeShelf.status === "ready" ? animeShelf.watching.total + animeShelf.watched.total : null
 
   return (
     <ToastProvider>
@@ -57,7 +53,7 @@ export default async function Home() {
                     postCount={blogCount}
                     chatterCount={chatterCount}
                     musicCount={siteConfig.cloudMusicIds.length}
-                    animeCount={animeCount}
+                    animeCount={null}
                   />
                 </div>
                 {/* 手机上占满1列，电脑上占5列 */}
@@ -71,7 +67,7 @@ export default async function Home() {
                 <LyricBar />
               </div>
 
-              <HomeStoryBoard animeShelf={animeShelf} />
+              <HomeStoryBoard />
               {/* 底部数据面板 */}
               <div className="w-full mt-4">
                 <SiteDashboard />

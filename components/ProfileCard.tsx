@@ -54,7 +54,7 @@ export default function ProfileCard({
 
       <div className="flex flex-col xl:flex-row items-center xl:items-end justify-between mt-6 md:mt-8 gap-5 md:gap-6 relative z-10">
         <div className="grid grid-cols-4 w-full xl:max-w-[390px]">
-          <StatItem count={postCount} label="博客" color="text-indigo-600 dark:text-indigo-400" />
+          <StatItem count={postCount} label="笔记" color="text-indigo-600 dark:text-indigo-400" />
           <StatItem
             count={chatterCount}
             label="杂谈"

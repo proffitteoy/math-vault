@@ -1,9 +1,9 @@
-"use client";
+"use client"
 
-import { useState } from "react";
+import { useState } from "react"
 
 export default function QuartzFrame({ src, title }: { src: string; title: string }) {
-  const [loaded, setLoaded] = useState(false);
+  const [loaded, setLoaded] = useState(false)
 
   return (
     <main className="relative z-10 h-[100dvh] w-screen overflow-hidden bg-white dark:bg-slate-950 md:mt-16 md:h-[calc(100dvh-4rem)]">
@@ -12,7 +12,7 @@ export default function QuartzFrame({ src, title }: { src: string; title: string
           <div className="flex flex-col items-center gap-4">
             <div className="h-10 w-10 animate-spin rounded-full border-4 border-indigo-500 border-t-transparent" />
             <p className="text-sm font-black tracking-widest text-slate-500 dark:text-slate-400">
-              正在载入博客页面...
+              正在载入笔记页面...
             </p>
           </div>
         </div>
@@ -25,5 +25,5 @@ export default function QuartzFrame({ src, title }: { src: string; title: string
         className="block h-full w-full border-0 bg-white dark:bg-slate-950"
       />
     </main>
-  );
+  )
 }

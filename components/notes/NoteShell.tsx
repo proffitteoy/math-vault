@@ -17,7 +17,7 @@ function formatDate(value?: string) {
 }
 
 export default async function NoteShell({ note }: { note: NoteArtifact }) {
-  const sectionTitle = note.section === "blog" ? "博客" : "杂谈"
+  const sectionTitle = note.section === "blog" ? "笔记" : "杂谈"
   const sectionRoute = `/${note.section}`
   const displayDate = formatDate(note.dates.modified ?? note.dates.created)
   const manifest = await getNoteManifest()
@@ -96,7 +96,7 @@ export default async function NoteShell({ note }: { note: NoteArtifact }) {
               </details>
             )}
 
-            <div className="quartz-note page min-h-0 min-w-0 !max-w-full overflow-hidden rounded-2xl border border-[#c7beb0] bg-[#f3f0ea] p-5 shadow-[0_24px_62px_-44px_rgba(43,37,29,0.68)] dark:border-[#343a44] dark:bg-[#1a1c20] sm:p-8 md:p-10">
+            <div className="quartz-note page min-h-0 min-w-0 !max-w-full overflow-hidden rounded-2xl border border-[#c7beb0] !bg-[#f3f0ea] p-5 shadow-[0_24px_62px_-44px_rgba(43,37,29,0.68)] dark:border-[#343a44] dark:!bg-[#1a1c20] sm:p-8 md:p-10">
               <article
                 id="main-content"
                 className="popover-hint min-w-0 max-w-full overflow-x-hidden [overflow-wrap:anywhere] [&_.katex-display]:max-w-full [&_.katex-display]:overflow-x-auto [&_.table-container]:max-w-full [&_.table-container]:overflow-x-auto [&_pre]:max-w-full [&_pre]:overflow-x-auto"

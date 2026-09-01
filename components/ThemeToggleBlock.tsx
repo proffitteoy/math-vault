@@ -1,28 +1,9 @@
 "use client"
 
-import { Moon, Sun } from "lucide-react"
 import { useTheme } from "./ThemeProvider"
 
-export default function ThemeToggleBlock({ compact = false }: { compact?: boolean }) {
+export default function ThemeToggleBlock() {
   const { isDark, toggleTheme } = useTheme()
-
-  if (compact) {
-    const Icon = isDark ? Sun : Moon
-
-    return (
-      <button
-        type="button"
-        onClick={toggleTheme}
-        aria-pressed={isDark}
-        aria-label={isDark ? "切换到日间模式" : "切换到夜间模式"}
-        title={isDark ? "切换到日间模式" : "切换到夜间模式"}
-        className="inline-flex h-10 items-center gap-2 rounded-full border border-white/55 bg-white/70 px-3.5 text-xs font-bold tracking-wide text-slate-700 shadow-sm backdrop-blur-xl transition-colors hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 dark:border-white/10 dark:bg-slate-950/55 dark:text-slate-200 dark:hover:bg-slate-900"
-      >
-        <Icon className="h-4 w-4" aria-hidden="true" />
-        {isDark ? "日间" : "夜间"}
-      </button>
-    )
-  }
 
   return (
     <button

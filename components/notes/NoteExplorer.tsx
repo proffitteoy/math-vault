@@ -91,7 +91,7 @@ function ExplorerPanel({
   currentPath: string
   idPrefix: string
 }) {
-  const sectionTitle = section === "blog" ? "博客" : "杂谈"
+  const sectionTitle = section === "blog" ? "笔记" : "杂谈"
   const [query, setQuery] = useState("")
   const [records, setRecords] = useState<NoteSearchRecord[]>([])
   const [results, setResults] = useState<NoteSearchRecord[]>([])

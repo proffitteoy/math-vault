@@ -27,7 +27,7 @@ export default function NoteCollectionPage({
   notes: NoteArtifact[]
   folderRoute?: string
 }) {
-  const sectionTitle = section === "blog" ? "博客" : "杂谈"
+  const sectionTitle = section === "blog" ? "笔记" : "杂谈"
 
   return (
     <div className="relative min-h-screen pb-20">

@@ -5,7 +5,7 @@ import { getSectionNotes } from "@/lib/notes/server"
 import { siteConfig } from "@/siteConfig"
 
 export const metadata: Metadata = {
-  title: `博客 | ${siteConfig.title}`,
+  title: `笔记 | ${siteConfig.title}`,
   description: "数学、拓扑数据分析、编程与长期研究笔记。",
 }
 
