@@ -4,34 +4,36 @@ import Image from "next/image"
 import Link from "next/link"
 import { useState } from "react"
 import { motion, useReducedMotion } from "framer-motion"
-import { ArrowUpRight, ChevronLeft, ChevronRight, Clapperboard, FolderGit2 } from "lucide-react"
+import {
+  ArrowUpRight,
+  ChevronLeft,
+  ChevronRight,
+  Clapperboard,
+  GalleryHorizontalEnd,
+} from "lucide-react"
 
 import type { AnimeShelfState } from "../app/anime/bangumi"
 import { siteConfig } from "../siteConfig"
 import ThemeToggleBlock from "./ThemeToggleBlock"
-
-const projectHighlights = [
-  { name: "early-rumor-propagation-tda", kind: "TDA · Research" },
-  { name: "Iris-Terminal", kind: "AI4MATH · Local-first" },
-  { name: "ai-data-competitions-ui", kind: "Next.js · React" },
-  { name: "topp", kind: "TDA · Python" },
-]
 
 const storyPhotos = [
   {
     src: "/profile-studio.png",
     alt: "灯光下的个人研究工作台",
     label: "研究工作台",
+    description: "数学、代码与深夜灯光",
   },
   {
     src: siteConfig.photoWallImage,
     alt: "个人照片墙中的日常记录",
     label: "日常记录",
+    description: "散落在生活里的片段",
   },
   {
     src: "/about-cover.png",
     alt: "关于页面的个人主题照片",
     label: "关于我",
+    description: "一路走来的简短侧写",
   },
 ]
 
@@ -53,8 +55,11 @@ export default function HomeStoryBoard({ animeShelf }: { animeShelf: AnimeShelfS
   }
 
   return (
-    <section className="grid grid-cols-1 gap-5 lg:grid-cols-12" aria-label="近况与作品">
-      <figure className="group relative min-h-[300px] overflow-hidden rounded-[2rem] border border-white/55 bg-white/45 shadow-[0_24px_70px_-36px_rgba(15,23,42,0.65)] backdrop-blur-xl lg:col-span-7 lg:row-span-2 lg:min-h-[390px] dark:border-white/10 dark:bg-slate-900/45">
+    <section
+      className="grid grid-cols-1 gap-5 lg:grid-cols-12 lg:items-stretch"
+      aria-label="近况、照片与番剧"
+    >
+      <figure className="group relative min-h-[340px] overflow-hidden rounded-[2rem] border border-white/55 bg-white/45 shadow-[0_24px_70px_-36px_rgba(15,23,42,0.65)] backdrop-blur-xl lg:col-span-7 lg:min-h-[430px] dark:border-white/10 dark:bg-slate-900/45">
         {storyPhotos.map((photo, index) => (
           <Image
             key={photo.src}
@@ -76,7 +81,7 @@ export default function HomeStoryBoard({ animeShelf }: { animeShelf: AnimeShelfS
         <figcaption className="absolute inset-x-0 bottom-0 flex items-end justify-between gap-4 p-5 sm:p-7">
           <div className="max-w-lg text-white">
             <p className="text-[10px] font-black uppercase tracking-[0.32em] text-sky-200/90">
-              {storyPhotos[activePhoto].label} · 2026
+              Photo Notes · {storyPhotos[activePhoto].label}
             </p>
             <h2 className="mt-2 text-2xl font-black tracking-tight sm:text-3xl">
               研究、构建，也持续记录。
@@ -85,99 +90,134 @@ export default function HomeStoryBoard({ animeShelf }: { animeShelf: AnimeShelfS
         </figcaption>
       </figure>
 
-      <article className="relative overflow-hidden rounded-[2rem] border border-white/55 bg-white/55 p-5 shadow-[0_20px_60px_-38px_rgba(15,23,42,0.7)] backdrop-blur-xl sm:p-6 lg:col-span-5 dark:border-white/10 dark:bg-slate-900/55">
-        <div className="absolute -right-20 -top-24 h-48 w-48 rounded-full bg-sky-300/20 blur-3xl dark:bg-sky-500/10" />
-        <div className="relative">
-          <div className="flex flex-wrap items-start justify-between gap-4">
+      <article className="relative overflow-hidden rounded-[2rem] border border-white/60 bg-white/70 p-5 shadow-[0_20px_60px_-38px_rgba(15,23,42,0.7)] backdrop-blur-xl sm:p-6 lg:col-span-5 dark:border-white/10 dark:bg-slate-900/60">
+        <div className="absolute -right-20 -top-24 h-52 w-52 rounded-full bg-sky-300/25 blur-3xl dark:bg-sky-500/10" />
+        <div className="relative flex h-full flex-col">
+          <div className="flex items-start justify-between gap-4">
             <div>
               <p className="flex items-center gap-2 text-[10px] font-black uppercase tracking-[0.28em] text-sky-700 dark:text-sky-300">
-                <FolderGit2 className="h-4 w-4" aria-hidden="true" />
-                Selected Work
+                <GalleryHorizontalEnd className="h-4 w-4" aria-hidden="true" />
+                Photo Index
               </p>
-              <h2 className="mt-2 text-xl font-black text-slate-900 dark:text-white">
-                正在维护的作品
+              <h2 className="mt-2 text-2xl font-black text-slate-950 dark:text-white">
+                翻阅左侧照片
               </h2>
+              <p className="mt-2 text-xs font-medium text-slate-600 dark:text-slate-400">
+                选择一页，左侧会切换到对应画面。
+              </p>
             </div>
-            <div className="flex items-center gap-2">
-              <div className="flex items-center rounded-full border border-slate-200/80 bg-white/65 p-1 shadow-sm dark:border-white/10 dark:bg-slate-950/40">
-                <button
-                  type="button"
-                  onClick={showPreviousPhoto}
-                  aria-label="查看上一张左侧照片"
-                  className="inline-flex h-7 w-7 items-center justify-center rounded-full text-slate-600 transition-colors hover:bg-sky-100 hover:text-sky-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 dark:text-slate-300 dark:hover:bg-sky-400/10 dark:hover:text-sky-300"
-                >
-                  <ChevronLeft className="h-4 w-4" aria-hidden="true" />
-                </button>
-                <span className="px-1 text-[10px] font-black tabular-nums text-slate-500 dark:text-slate-400">
-                  照片 {activePhoto + 1}/{storyPhotos.length}
-                </span>
-                <button
-                  type="button"
-                  onClick={showNextPhoto}
-                  aria-label="查看下一张左侧照片"
-                  className="inline-flex h-7 w-7 items-center justify-center rounded-full text-slate-600 transition-colors hover:bg-sky-100 hover:text-sky-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 dark:text-slate-300 dark:hover:bg-sky-400/10 dark:hover:text-sky-300"
-                >
-                  <ChevronRight className="h-4 w-4" aria-hidden="true" />
-                </button>
-              </div>
-              <Link
-                href="/projects"
-                aria-label="查看全部项目"
-                className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-slate-200/80 bg-white/65 text-slate-700 transition-colors hover:border-sky-300 hover:text-sky-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 dark:border-white/10 dark:bg-slate-950/40 dark:text-slate-200 dark:hover:border-sky-400/40 dark:hover:text-sky-300"
-              >
-                <ArrowUpRight className="h-4 w-4" aria-hidden="true" />
-              </Link>
-            </div>
+            <Link
+              href="/projects"
+              className="inline-flex shrink-0 items-center gap-1 rounded-full border border-slate-200/80 bg-white/70 px-3 py-2 text-[11px] font-bold text-slate-700 transition-colors hover:border-sky-300 hover:text-sky-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 dark:border-white/10 dark:bg-slate-950/45 dark:text-slate-200 dark:hover:text-sky-300"
+            >
+              项目档案
+              <ArrowUpRight className="h-3.5 w-3.5" aria-hidden="true" />
+            </Link>
           </div>
 
-          <div className="mt-5 grid gap-2 sm:grid-cols-2">
-            {projectHighlights.map((project, index) => (
-              <div
-                key={project.name}
-                className="rounded-2xl border border-slate-200/70 bg-white/45 px-3.5 py-3 dark:border-white/10 dark:bg-slate-950/25"
+          <div className="mt-6 grid gap-2.5">
+            {storyPhotos.map((photo, index) => {
+              const active = index === activePhoto
+              return (
+                <button
+                  key={photo.src}
+                  type="button"
+                  onClick={() => setActivePhoto(index)}
+                  aria-pressed={active}
+                  className={`group/photo flex min-w-0 items-center gap-3 rounded-2xl border p-2.5 text-left transition-all duration-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 ${active ? "border-sky-300/80 bg-sky-50/90 shadow-[0_12px_35px_-24px_rgba(2,132,199,0.8)] dark:border-sky-400/35 dark:bg-sky-400/10" : "border-slate-200/80 bg-white/50 hover:border-sky-200 hover:bg-white/80 dark:border-white/10 dark:bg-slate-950/25 dark:hover:border-sky-400/25"}`}
+                >
+                  <span className="relative h-14 w-[4.5rem] shrink-0 overflow-hidden rounded-xl bg-slate-200 dark:bg-slate-800">
+                    <Image
+                      src={photo.src}
+                      alt=""
+                      fill
+                      className="object-cover transition-transform duration-500 group-hover/photo:scale-105"
+                      sizes="72px"
+                    />
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block text-[9px] font-black tracking-[0.2em] text-sky-700 dark:text-sky-300">
+                      0{index + 1}
+                    </span>
+                    <span className="mt-0.5 block text-sm font-black text-slate-900 dark:text-white">
+                      {photo.label}
+                    </span>
+                    <span className="mt-0.5 block truncate text-[11px] font-medium text-slate-500 dark:text-slate-400">
+                      {photo.description}
+                    </span>
+                  </span>
+                  <ChevronRight
+                    className={`h-4 w-4 shrink-0 transition-transform ${active ? "translate-x-0 text-sky-600 dark:text-sky-300" : "-translate-x-1 text-slate-300 group-hover/photo:translate-x-0 group-hover/photo:text-sky-500"}`}
+                    aria-hidden="true"
+                  />
+                </button>
+              )
+            })}
+          </div>
+
+          <div className="mt-auto flex items-center justify-between gap-3 pt-5">
+            <span className="text-[10px] font-black tracking-[0.16em] text-slate-400">
+              {String(activePhoto + 1).padStart(2, "0")} /{" "}
+              {String(storyPhotos.length).padStart(2, "0")}
+            </span>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={showPreviousPhoto}
+                aria-label="查看上一张左侧照片"
+                className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-slate-200/80 bg-white/70 text-slate-600 transition-colors hover:border-sky-300 hover:text-sky-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 dark:border-white/10 dark:bg-slate-950/40 dark:text-slate-300 dark:hover:text-sky-300"
               >
-                <div className="text-[10px] font-black tabular-nums text-slate-400">
-                  0{index + 1}
-                </div>
-                <h3 className="mt-1 break-words text-sm font-black leading-snug text-slate-800 dark:text-slate-100">
-                  {project.name}
-                </h3>
-                <p className="mt-1 text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
-                  {project.kind}
-                </p>
-              </div>
-            ))}
+                <ChevronLeft className="h-4 w-4" aria-hidden="true" />
+              </button>
+              <button
+                type="button"
+                onClick={showNextPhoto}
+                aria-label="查看下一张左侧照片"
+                className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-slate-200/80 bg-white/70 text-slate-600 transition-colors hover:border-sky-300 hover:text-sky-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 dark:border-white/10 dark:bg-slate-950/40 dark:text-slate-300 dark:hover:text-sky-300"
+              >
+                <ChevronRight className="h-4 w-4" aria-hidden="true" />
+              </button>
+            </div>
           </div>
         </div>
       </article>
 
       <Link
         href="/anime"
-        className="group relative overflow-hidden rounded-[2rem] border border-white/55 bg-slate-950/85 p-5 text-white shadow-[0_20px_60px_-36px_rgba(15,23,42,0.85)] backdrop-blur-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400 sm:p-6 lg:col-span-5 dark:border-white/10"
+        className="group relative overflow-hidden rounded-[2rem] border border-white/55 bg-slate-950/90 p-5 text-white shadow-[0_20px_60px_-36px_rgba(15,23,42,0.85)] backdrop-blur-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400 sm:p-6 lg:col-span-12 dark:border-white/10"
       >
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_85%_10%,rgba(56,189,248,0.22),transparent_45%)]" />
-        <div className="relative flex min-h-[180px] flex-col justify-between gap-5">
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_88%_10%,rgba(56,189,248,0.25),transparent_42%)]" />
+        <div className="relative flex min-h-[175px] flex-col gap-5">
           <div className="flex items-start justify-between gap-4">
             <div>
               <p className="flex items-center gap-2 text-[10px] font-black uppercase tracking-[0.28em] text-sky-200">
                 <Clapperboard className="h-4 w-4" aria-hidden="true" />
                 Anime Log
               </p>
-              <h2 className="mt-2 text-xl font-black">{animeReady ? "现在正在看" : "番剧档案"}</h2>
+              <h2 className="mt-2 text-2xl font-black">{animeReady ? "现在正在看" : "番剧档案"}</h2>
             </div>
-            <ArrowUpRight
-              className="h-5 w-5 text-sky-200 transition-transform duration-300 group-hover:-translate-y-0.5 group-hover:translate-x-0.5"
-              aria-hidden="true"
-            />
+            <div className="flex items-center gap-3">
+              {animeReady && covers.length > 4 && (
+                <span className="hidden items-center gap-2 text-[10px] font-black tracking-[0.18em] text-sky-200 sm:inline-flex">
+                  <span className="h-1.5 w-1.5 rounded-full bg-sky-300 shadow-[0_0_12px_rgba(125,211,252,0.9)]" />
+                  自动滚播
+                </span>
+              )}
+              <ArrowUpRight
+                className="h-5 w-5 text-sky-200 transition-transform duration-300 group-hover:-translate-y-0.5 group-hover:translate-x-0.5"
+                aria-hidden="true"
+              />
+            </div>
           </div>
 
           {animeReady ? (
-            <div className="flex items-end gap-5">
-              <div className="shrink-0">
-                <div className="text-4xl font-black tabular-nums">{watching?.total ?? 0}</div>
-                <p className="mt-1 text-xs font-medium text-slate-300">
-                  部在看 · 共记录 {totalAnime} 部
-                </p>
+            <div className="grid min-w-0 items-end gap-5 sm:grid-cols-[170px_minmax(0,1fr)]">
+              <div>
+                <div className="flex items-baseline gap-2">
+                  <span className="text-5xl font-black tabular-nums">{watching?.total ?? 0}</span>
+                  <span className="text-xs font-bold text-sky-200">部在看</span>
+                </div>
+                <p className="mt-1 text-xs font-medium text-slate-300">共记录 {totalAnime} 部</p>
               </div>
               {covers.length > 0 && (
                 <div
@@ -207,14 +247,14 @@ export default function HomeStoryBoard({ animeShelf }: { animeShelf: AnimeShelfS
                           <div
                             key={`${copy}-${anime.id}`}
                             title={anime.title}
-                            className="relative h-16 w-12 shrink-0 overflow-hidden rounded-xl border-2 border-slate-900 bg-slate-800 shadow-lg transition-transform duration-300 group-hover:-translate-y-1"
+                            className="relative h-24 w-16 shrink-0 overflow-hidden rounded-xl border-2 border-slate-900 bg-slate-800 shadow-lg transition-transform duration-300 group-hover:-translate-y-1"
                           >
                             <Image
                               src={anime.cover!}
                               alt={copy === 0 ? anime.title + "封面" : ""}
                               fill
                               className="object-cover"
-                              sizes="48px"
+                              sizes="64px"
                             />
                           </div>
                         ))}
