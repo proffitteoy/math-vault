@@ -1,174 +1,306 @@
-import { ArrowUpRight, Bot, Braces, Code2, Network, Orbit, TimerReset } from "lucide-react"
+"use client"
+
+import { useState, type PointerEvent } from "react"
+import { motion, useReducedMotion } from "framer-motion"
+import {
+  ArrowUpRight,
+  Binary,
+  Bot,
+  Code2,
+  Fingerprint,
+  Network,
+  Orbit,
+  type LucideIcon,
+} from "lucide-react"
 import BackButton from "../../components/BackButton"
 
-const projects = [
+type Project = {
+  name: string
+  category: string
+  description: string
+  href: string
+  tags: string[]
+  icon: LucideIcon
+  accent: string
+  size?: "research" | "standard"
+}
+
+const featuredProjects: Project[] = [
   {
     name: "early-rumor-propagation-tda",
+    category: "RESEARCH · 论文在投",
     description: "早期谣言传播树的拓扑特征构造与持久同调分析。",
     href: "https://github.com/proffitteoy/early-rumor-propagation-tda",
-    tags: ["TDA", "传播树", "持久同调"],
+    tags: ["TDA", "Research"],
     icon: Orbit,
-    tone: "from-sky-500/20 to-indigo-500/20",
+    accent: "56 189 248",
+    size: "research",
+  },
+  {
+    name: "topp",
+    category: "RESEARCH · 论文在投",
+    description: "拓扑数据分析的高速高性能 bottleneck/Wasserstein 计算 Python 库。",
+    href: "https://github.com/proffitteoy/Topp",
+    tags: ["TDA", "Python", "Exact Matching"],
+    icon: Binary,
+    accent: "59 130 246",
+    size: "research",
   },
   {
     name: "Iris-Terminal",
-    description: "本地优先 AI 研究工作台。",
+    category: "AI WORKBENCH",
+    description: "本地优先 AI4MATH 工作台。",
     href: "https://github.com/proffitteoy/Iris-Terminal",
-    tags: ["Local-first", "AI"],
+    tags: ["Local-first", "Research Workspace"],
     icon: Bot,
-    tone: "from-violet-500/20 to-fuchsia-500/20",
+    accent: "14 165 233",
   },
   {
     name: "ai-data-competitions-ui",
-    description: "面向学生竞赛的学院级服务网站与组件体系。",
+    category: "CAMPUS COMPETITION UI",
+    description: "面向学生竞赛的学院级服务网站。",
     href: "https://github.com/GDUF-quantitative/ai-data-competitions-ui",
-    tags: ["Next.js", "React", "Tailwind CSS"],
-    icon: Braces,
-    tone: "from-cyan-500/20 to-blue-500/20",
-  },
-  {
-    name: "TILO-PRC",
-    description: "结构感知图聚类、PRC 与 TILO 划分流程。",
-    href: "https://github.com/proffitteoy/TILO-PRC",
-    tags: ["图聚类", "PRC", "TILO"],
+    tags: ["Next.js", "React"],
     icon: Network,
-    tone: "from-emerald-500/20 to-teal-500/20",
-  },
-  {
-    name: "ManiMind",
-    description: "面向研究产物生成的 Agent 编排层。",
-    href: "https://github.com/proffitteoy/ManiMind",
-    tags: ["Agent", "工作流"],
-    icon: Bot,
-    tone: "from-amber-500/20 to-orange-500/20",
-  },
-  {
-    name: "Task-Manager",
-    description: "串联任务、计时、活动统计与每日复盘的本地优先工作站。",
-    href: "https://github.com/proffitteoy/Task-Manager",
-    tags: ["Electron", "Local-first"],
-    icon: TimerReset,
-    tone: "from-rose-500/20 to-pink-500/20",
+    accent: "6 182 212",
   },
 ]
 
-export default function ProjectsBoard() {
-  return (
-    <main className="w-full max-w-6xl mx-auto px-4 sm:px-6 lg:px-10 py-8 md:py-12 relative z-10">
-      <BackButton />
+const openSourceProjects: Project[] = [
+  {
+    name: "open-ani/animeko",
+    category: "OPEN SOURCE CONTRIBUTION",
+    description: "基于 CNN 的验证码识别算法开发。",
+    href: "https://github.com/open-ani/animeko",
+    tags: ["Kotlin Multiplatform", "Android"],
+    icon: Fingerprint,
+    accent: "56 189 248",
+  },
+  {
+    name: "GUDHI/gudhi-devel",
+    category: "OPEN SOURCE CONTRIBUTION",
+    description: "核心数学算法的正确性漏洞修复与跨平台验证。",
+    href: "https://github.com/GUDHI/gudhi-devel",
+    tags: ["C++", "Bottleneck Distance", "Python"],
+    icon: Code2,
+    accent: "37 99 235",
+  },
+]
 
-      <header className="flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between rounded-3xl bg-white/45 dark:bg-slate-800/50 backdrop-blur-xl border border-white/40 dark:border-white/10 shadow-xl p-6 md:p-8">
-        <div>
-          <h1 className="text-3xl md:text-4xl font-black text-slate-900 dark:text-white tracking-tight">
-            项目
-          </h1>
-          <p className="mt-3 text-sm leading-7 text-slate-600 dark:text-slate-300">
-            近期维护的个人项目与开源协作。
+function ProjectCard({
+  project,
+  activeProject,
+  setActiveProject,
+  className = "",
+}: {
+  project: Project
+  activeProject: string | null
+  setActiveProject: (name: string | null) => void
+  className?: string
+}) {
+  const reduceMotion = useReducedMotion()
+  const [spotlight, setSpotlight] = useState({ x: 50, y: 50 })
+  const [tilt, setTilt] = useState({ x: 0, y: 0 })
+  const Icon = project.icon
+  const dimmed = activeProject !== null && activeProject !== project.name
+
+  function handlePointerMove(event: PointerEvent<HTMLAnchorElement>) {
+    if (reduceMotion || event.pointerType !== "mouse") return
+
+    const bounds = event.currentTarget.getBoundingClientRect()
+    const x = ((event.clientX - bounds.left) / bounds.width) * 100
+    const y = ((event.clientY - bounds.top) / bounds.height) * 100
+    setSpotlight({ x, y })
+    setTilt({ x: (50 - y) / 18, y: (x - 50) / 18 })
+  }
+
+  function resetCard() {
+    setActiveProject(null)
+    setTilt({ x: 0, y: 0 })
+  }
+
+  return (
+    <motion.a
+      href={project.href}
+      target="_blank"
+      rel="noopener noreferrer"
+      onFocus={() => setActiveProject(project.name)}
+      onBlur={resetCard}
+      onPointerEnter={(event) => {
+        if (event.pointerType === "mouse") setActiveProject(project.name)
+      }}
+      onPointerMove={handlePointerMove}
+      onPointerLeave={resetCard}
+      animate={{
+        rotateX: reduceMotion ? 0 : tilt.x,
+        rotateY: reduceMotion ? 0 : tilt.y,
+        opacity: dimmed ? 0.68 : 1,
+      }}
+      transition={{ type: "spring", stiffness: 260, damping: 24, mass: 0.7 }}
+      className={`group relative isolate flex overflow-hidden rounded-[1.75rem] border border-white/55 bg-white/55 p-5 shadow-[0_18px_55px_-35px_rgba(15,23,42,0.45)] backdrop-blur-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 focus-visible:ring-offset-4 focus-visible:ring-offset-transparent dark:border-white/10 dark:bg-slate-900/55 sm:p-6 ${className}`}
+      style={{ transformPerspective: 900, transformStyle: "preserve-3d" }}
+    >
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-0 -z-10 opacity-0 transition-opacity duration-300 group-hover:opacity-100 group-focus-visible:opacity-100"
+        style={{
+          background: `radial-gradient(420px circle at ${spotlight.x}% ${spotlight.y}%, rgb(${project.accent} / 0.2), transparent 58%)`,
+        }}
+      />
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute -right-14 -top-14 -z-10 h-40 w-40 rounded-full blur-3xl"
+        style={{ backgroundColor: `rgb(${project.accent} / 0.14)` }}
+      />
+
+      <div className="flex w-full flex-col" style={{ transform: "translateZ(22px)" }}>
+        <div className="flex items-start justify-between gap-4">
+          <div
+            className="flex h-11 w-11 items-center justify-center rounded-2xl border border-white/70 bg-white/70 shadow-sm dark:border-white/10 dark:bg-slate-950/60"
+            style={{ color: `rgb(${project.accent})` }}
+          >
+            <Icon className="h-5 w-5" aria-hidden="true" />
+          </div>
+          <ArrowUpRight
+            className="h-5 w-5 text-slate-400 transition-transform duration-300 group-hover:-translate-y-1 group-hover:translate-x-1 group-hover:text-sky-500 group-focus-visible:-translate-y-1 group-focus-visible:translate-x-1"
+            aria-hidden="true"
+          />
+        </div>
+
+        <div className="mt-8">
+          <p className="text-[10px] font-black tracking-[0.22em] text-sky-700 dark:text-sky-300">
+            {project.category}
+          </p>
+          <h3
+            className={`mt-3 break-words font-black leading-[1.08] tracking-[-0.035em] text-slate-950 dark:text-white ${project.size === "research" ? "text-2xl sm:text-[1.75rem]" : "text-xl sm:text-2xl"}`}
+          >
+            {project.name}
+          </h3>
+          <p className="mt-3 max-w-xl text-sm font-medium leading-7 text-slate-600 dark:text-slate-300">
+            {project.description}
           </p>
         </div>
-        <a
-          href="https://github.com/proffitteoy"
-          target="_blank"
-          rel="noopener noreferrer"
-          className="inline-flex w-fit items-center gap-2 rounded-full bg-indigo-500 px-5 py-2.5 text-sm font-bold text-white shadow-lg shadow-indigo-500/20 transition-all duration-300 hover:-translate-y-0.5 hover:bg-indigo-600"
-        >
-          <Code2 className="h-4 w-4" aria-hidden="true" />
-          GitHub
-        </a>
+
+        <ul className="mt-auto flex flex-wrap gap-2 pt-8" aria-label={`${project.name} 标签`}>
+          {project.tags.map((tag) => (
+            <li
+              className="rounded-full border border-slate-200/80 bg-white/60 px-3 py-1.5 text-[11px] font-bold text-slate-600 dark:border-white/10 dark:bg-slate-950/45 dark:text-slate-300"
+              key={tag}
+            >
+              {tag}
+            </li>
+          ))}
+        </ul>
+      </div>
+    </motion.a>
+  )
+}
+
+export default function ProjectsBoard() {
+  const [activeProject, setActiveProject] = useState<string | null>(null)
+
+  return (
+    <main className="relative z-10 mx-auto w-full max-w-6xl px-4 py-8 sm:px-6 md:py-12 lg:px-10">
+      <BackButton />
+
+      <header className="relative overflow-hidden rounded-[2rem] border border-white/55 bg-white/50 p-6 shadow-[0_24px_70px_-42px_rgba(15,23,42,0.55)] backdrop-blur-xl dark:border-white/10 dark:bg-slate-900/55 md:p-9">
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute -right-20 -top-28 h-72 w-72 rounded-full bg-sky-400/15 blur-3xl"
+        />
+        <div className="relative flex flex-col gap-8 sm:flex-row sm:items-end sm:justify-between">
+          <div className="max-w-2xl">
+            <p className="text-[10px] font-black tracking-[0.3em] text-sky-700 dark:text-sky-300">
+              SELECTED WORK · 2026
+            </p>
+            <h1 className="mt-3 text-4xl font-black tracking-[-0.055em] text-slate-950 dark:text-white md:text-5xl">
+              项目档案
+            </h1>
+            <p className="mt-4 text-sm font-medium leading-7 text-slate-600 dark:text-slate-300 sm:text-base">
+              从拓扑数据分析到本地研究工具，也记录进入成熟开源项目的真实协作。
+            </p>
+          </div>
+          <a
+            href="https://github.com/proffitteoy"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex w-fit items-center gap-2 rounded-full bg-slate-950 px-5 py-3 text-sm font-bold text-white shadow-lg transition-transform duration-300 hover:-translate-y-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 focus-visible:ring-offset-4 dark:bg-white dark:text-slate-950 motion-reduce:transform-none"
+          >
+            <Code2 className="h-4 w-4" aria-hidden="true" />
+            GitHub 主页
+            <ArrowUpRight className="h-4 w-4" aria-hidden="true" />
+          </a>
+        </div>
       </header>
 
-      <section className="mt-8" aria-labelledby="personal-projects-title">
-        <h2
-          id="personal-projects-title"
-          className="mb-4 text-xl font-black text-slate-900 dark:text-white"
-        >
-          个人项目
-        </h2>
-
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {projects.map(({ icon: Icon, ...project }) => (
-            <a
-              href={project.href}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="group relative overflow-hidden rounded-3xl bg-white/45 dark:bg-slate-800/50 backdrop-blur-xl border border-white/40 dark:border-white/10 shadow-lg p-5 transition-all duration-300 hover:-translate-y-1 hover:shadow-xl"
-              key={project.name}
+      <section className="mt-10" aria-labelledby="featured-projects-title">
+        <div className="mb-5 flex items-end justify-between gap-4 px-1">
+          <div>
+            <p className="text-[10px] font-black tracking-[0.24em] text-sky-700 dark:text-sky-300">
+              01 / FEATURED
+            </p>
+            <h2
+              id="featured-projects-title"
+              className="mt-2 text-2xl font-black tracking-tight text-slate-950 dark:text-white"
             >
-              <div
-                className={`absolute inset-0 bg-gradient-to-br ${project.tone} opacity-60 transition-opacity duration-300 group-hover:opacity-90`}
-              />
+              代表作品
+            </h2>
+          </div>
+          <p className="hidden text-xs font-bold text-slate-400 sm:block">研究优先 · 工具落地</p>
+        </div>
 
-              <div className="relative flex min-h-44 flex-col">
-                <div className="flex items-start justify-between gap-4">
-                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-white/70 dark:bg-slate-900/60 border border-white/50 dark:border-white/10 shadow-sm">
-                    <Icon
-                      className="h-5 w-5 text-indigo-600 dark:text-indigo-300"
-                      aria-hidden="true"
-                    />
-                  </div>
-                  <ArrowUpRight
-                    className="h-4 w-4 text-slate-400 transition-transform duration-300 group-hover:-translate-y-0.5 group-hover:translate-x-0.5 group-hover:text-indigo-500"
-                    aria-hidden="true"
-                  />
-                </div>
-
-                <div className="mt-5">
-                  <h3 className="text-lg font-black leading-snug text-slate-900 dark:text-white break-words">
-                    {project.name}
-                  </h3>
-                  <p className="mt-2 text-sm leading-6 text-slate-600 dark:text-slate-300">
-                    {project.description}
-                  </p>
-                </div>
-
-                <ul
-                  className="mt-auto flex flex-wrap gap-1.5 pt-4"
-                  aria-label={`${project.name} 标签`}
-                >
-                  {project.tags.map((tag) => (
-                    <li
-                      className="rounded-full bg-white/65 dark:bg-slate-900/50 px-2.5 py-1 text-[11px] font-bold text-slate-600 dark:text-slate-300"
-                      key={tag}
-                    >
-                      {tag}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            </a>
-          ))}
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-12">
+          <ProjectCard
+            project={featuredProjects[0]}
+            activeProject={activeProject}
+            setActiveProject={setActiveProject}
+            className="min-h-[310px] lg:col-span-7"
+          />
+          <ProjectCard
+            project={featuredProjects[1]}
+            activeProject={activeProject}
+            setActiveProject={setActiveProject}
+            className="min-h-[310px] lg:col-span-5"
+          />
+          <ProjectCard
+            project={featuredProjects[2]}
+            activeProject={activeProject}
+            setActiveProject={setActiveProject}
+            className="min-h-[260px] lg:col-span-5"
+          />
+          <ProjectCard
+            project={featuredProjects[3]}
+            activeProject={activeProject}
+            setActiveProject={setActiveProject}
+            className="min-h-[260px] lg:col-span-7"
+          />
         </div>
       </section>
 
-      <section className="mt-8" aria-labelledby="open-source-title">
-        <h2
-          id="open-source-title"
-          className="mb-4 text-xl font-black text-slate-900 dark:text-white"
-        >
-          开源贡献
-        </h2>
-        <a
-          href="https://github.com/open-ani/animeko"
-          target="_blank"
-          rel="noopener noreferrer"
-          className="group flex flex-col gap-4 rounded-3xl bg-white/45 dark:bg-slate-800/50 backdrop-blur-xl border border-white/40 dark:border-white/10 shadow-lg p-5 transition-all duration-300 hover:-translate-y-1 hover:shadow-xl sm:flex-row sm:items-center"
-        >
-          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-indigo-500/10 dark:bg-indigo-400/10">
-            <Code2 className="h-5 w-5 text-indigo-600 dark:text-indigo-300" aria-hidden="true" />
-          </div>
-          <div className="min-w-0 flex-1">
-            <h3 className="text-lg font-black text-slate-900 dark:text-white">
-              open-ani / animeko
-            </h3>
-            <p className="mt-1 text-sm leading-6 text-slate-600 dark:text-slate-300">
-              Android / Kotlin Multiplatform 调试修复、构建验证和 PR 协作。
-            </p>
-          </div>
-          <ArrowUpRight
-            className="h-5 w-5 shrink-0 text-slate-400 transition-transform duration-300 group-hover:-translate-y-0.5 group-hover:translate-x-0.5 group-hover:text-indigo-500"
-            aria-hidden="true"
-          />
-        </a>
+      <section className="mt-10" aria-labelledby="open-source-title">
+        <div className="mb-5 px-1">
+          <p className="text-[10px] font-black tracking-[0.24em] text-sky-700 dark:text-sky-300">
+            02 / COLLABORATION
+          </p>
+          <h2
+            id="open-source-title"
+            className="mt-2 text-2xl font-black tracking-tight text-slate-950 dark:text-white"
+          >
+            开源贡献
+          </h2>
+        </div>
+
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+          {openSourceProjects.map((project) => (
+            <ProjectCard
+              key={project.name}
+              project={project}
+              activeProject={activeProject}
+              setActiveProject={setActiveProject}
+              className="min-h-[270px]"
+            />
+          ))}
+        </div>
       </section>
     </main>
   )
