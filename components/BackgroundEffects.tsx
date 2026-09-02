@@ -8,6 +8,12 @@ const FRAME_MS = 1000 / 30
 const MAX_PIXEL_RATIO = 1.25
 const TAU = Math.PI * 2
 const PHI = (1 + Math.sqrt(5)) / 2
+const EFFECT_COUNTS = {
+  sakura: 40,
+  fireflies: 50,
+  grass: 150,
+  danmaku: 15,
+} as const
 
 function hash(index: number, seed: number) {
   const value = Math.sin(index * 12.9898 + seed * 78.233) * 43758.5453
@@ -16,6 +22,16 @@ function hash(index: number, seed: number) {
 
 function wrap(value: number, size: number) {
   return ((value % size) + size) % size
+}
+
+function sideWeightedPosition(index: number, seed: number) {
+  const position = hash(index, seed)
+  const edgePosition =
+    position < 0.5
+      ? 0.5 * Math.pow(position * 2, 1.45)
+      : 1 - 0.5 * Math.pow((1 - position) * 2, 1.45)
+
+  return position + (edgePosition - position) * 0.28
 }
 
 function createFireflySprite() {
@@ -50,8 +66,8 @@ export default function BackgroundEffects() {
 
     const sakura = isDark
       ? []
-      : Array.from({ length: 20 }, (_, index) => ({
-          x0: hash(index, 1),
+      : Array.from({ length: EFFECT_COUNTS.sakura }, (_, index) => ({
+          x0: sideWeightedPosition(index, 1),
           y0: hash(index, 2),
           wind: -4 + hash(index, 3) * 8,
           a: 18 + hash(index, 4) * 34,
@@ -71,8 +87,8 @@ export default function BackgroundEffects() {
           opacity: 0.38 + hash(index, 18) * 0.32,
         }))
     const fireflies = isDark
-      ? Array.from({ length: 20 }, (_, index) => ({
-          x0: 0.08 + hash(index, 1) * 0.84,
+      ? Array.from({ length: EFFECT_COUNTS.fireflies }, (_, index) => ({
+          x0: 0.04 + sideWeightedPosition(index, 1) * 0.92,
           y0: 0.08 + hash(index, 2) * 0.76,
           a: 20 + hash(index, 3) * 44,
           b: 7 + hash(index, 4) * 18,
@@ -89,8 +105,10 @@ export default function BackgroundEffects() {
           radius: 2.2 + hash(index, 15) * 2.4,
         }))
       : []
-    const grass = Array.from({ length: 60 }, (_, index) => ({
-      x: (index + 0.5 + (hash(index, 1) - 0.5) * 0.55) / 60,
+    const grass = Array.from({ length: EFFECT_COUNTS.grass }, (_, index) => ({
+      x:
+        (index + 0.5 + (hash(index, 1) - 0.5) * 0.55) /
+        EFFECT_COUNTS.grass,
       height: 30 + hash(index, 2) * 52,
       width: 1 + hash(index, 3) * 1.8,
       baseAngle: -0.07 + hash(index, 4) * 0.14,
@@ -100,7 +118,7 @@ export default function BackgroundEffects() {
       opacity: 0.24 + hash(index, 8) * 0.34,
     }))
     const danmaku = siteConfig.danmakuList.length
-      ? Array.from({ length: 8 }, (_, index) => ({
+      ? Array.from({ length: EFFECT_COUNTS.danmaku }, (_, index) => ({
           text: siteConfig.danmakuList[
             Math.floor(hash(index, 1) * siteConfig.danmakuList.length)
           ],
