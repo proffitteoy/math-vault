@@ -53,11 +53,6 @@ export default async function NoteShell({ note }: { note: NoteArtifact }) {
               <h1 className="mt-5 break-words font-serif text-3xl font-black leading-tight tracking-[-0.035em] text-[#2b251d] dark:text-[#f2f4f7] sm:text-4xl">
                 {note.title}
               </h1>
-              {note.description && (
-                <p className="mt-4 max-w-3xl text-sm font-medium leading-7 text-[#665d52] dark:text-[#aeb5c0]">
-                  {note.description}
-                </p>
-              )}
               {note.tags.length > 0 && (
                 <ul className="mt-5 flex flex-wrap gap-2" aria-label="笔记标签">
                   {note.tags.map((tag) => (

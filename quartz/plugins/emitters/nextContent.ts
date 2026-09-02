@@ -2,7 +2,6 @@ import fs from "node:fs"
 import path from "node:path"
 import type { Element, Root } from "hast"
 import { toHtml } from "hast-util-to-html"
-import { toString } from "hast-util-to-string"
 import { visit } from "unist-util-visit"
 
 import type {
@@ -28,37 +27,6 @@ import type { QuartzEmitterPlugin } from "../types"
 const artifactRoot = path.join(".quartz-cache", "next")
 const publicAssetRoot = path.join("public", "quartz-assets", "content")
 const assetExtension = /\.(?:avif|gif|ico|jpe?g|pdf|png|svg|webp|mp3|mp4|wav|woff2?|ttf)$/i
-const summaryBlockTags = new Set(["p", "blockquote", "ul", "ol"])
-const descriptionLimit = 160
-
-function shortenDescription(value: string) {
-  const normalized = value
-    .replace(/[\u200B-\u200D\uFEFF]/g, "")
-    .replace(/\s+/g, " ")
-    .replace(/\s+([，。！？；：,.!?;:])/g, "$1")
-    .trim()
-
-  if (normalized.length <= descriptionLimit) return normalized
-
-  const head = normalized.slice(0, descriptionLimit + 1)
-  const punctuation = [...head.matchAll(/[。！？；.!?;]/g)].at(-1)
-  const end =
-    punctuation && punctuation.index !== undefined && punctuation.index >= 60
-      ? punctuation.index + 1
-      : descriptionLimit
-  return `${head.slice(0, end).trimEnd()}…`
-}
-
-export function getNoteDescription(tree: Root, explicitDescription?: unknown) {
-  if (typeof explicitDescription === "string" && explicitDescription.trim()) {
-    return shortenDescription(explicitDescription)
-  }
-
-  const firstBlock = tree.children.find(
-    (node): node is Element => node.type === "element" && summaryBlockTags.has(node.tagName),
-  )
-  return firstBlock ? shortenDescription(toString(firstBlock)) : ""
-}
 
 export function getNoteSection(slug: string): NoteSection {
   const simple = simplifySlug(slug as FullSlug).replace(/^\/+|\/+$/g, "")
@@ -357,7 +325,7 @@ function buildArtifact(
     route,
     sourcePath: fileData.relativePath!,
     title: fileData.frontmatter?.title ?? simplifySlug(fileData.slug!),
-    description: getNoteDescription(rewritten.tree, fileData.frontmatter?.description),
+    description: "",
     dates: {
       created: toIsoString(fileData.dates?.created),
       modified: toIsoString(fileData.dates?.modified),
