@@ -7,11 +7,11 @@ code[data-theme*=" "] span {
   color: var(--shiki-light);
 }
 
-[saved-theme="dark"] code[data-theme*=" "] {
+:root[saved-theme="dark"] code[data-theme*=" "] {
   color: var(--shiki-dark);
   background-color: var(--shiki-dark-bg);
 }
 
-[saved-theme="dark"] code[data-theme*=" "] span {
+:root[saved-theme="dark"] code[data-theme*=" "] span {
   color: var(--shiki-dark);
 }

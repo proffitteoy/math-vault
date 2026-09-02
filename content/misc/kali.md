@@ -1,3 +1,6 @@
+---
+cover: "/chatter-covers/2ff057fc4fb00eab338d883d10ef38f2183a95b4.png"
+---
 
 ## hashcat
 破哈希密码的玩意
@@ -41,6 +44,3 @@ nmap -p n1,n2...IP
 ```kali
 sqlmap -u "https:" -D "数据库名" -T "数据表" -dump
 ```
----
-cover: "/chatter-covers/2ff057fc4fb00eab338d883d10ef38f2183a95b4.png"
----

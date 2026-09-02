@@ -8,6 +8,9 @@
   --blog-shadow: 0 20px 48px rgba(15, 23, 42, 0.18);
   --blog-accent-soft: color-mix(in srgb, var(--secondary) 16%, transparent);
   --blog-focus-ring: color-mix(in srgb, var(--secondary) 62%, white 38%);
+  --blog-code-bg: #f6f8fa;
+  --blog-code-border: #d0d7de;
+  --blog-code-fg: #24292f;
   --blog-reading-gradient: linear-gradient(
     90deg,
     color-mix(in srgb, var(--secondary) 74%, #ffffff 26%),
@@ -22,6 +25,9 @@
   --blog-shadow: 0 20px 48px rgba(0, 0, 0, 0.45);
   --blog-accent-soft: color-mix(in srgb, var(--secondary) 24%, transparent);
   --blog-focus-ring: color-mix(in srgb, var(--secondary) 72%, #dbeafe 28%);
+  --blog-code-bg: #0d1117;
+  --blog-code-border: #3d444d;
+  --blog-code-fg: #e6edf3;
   --blog-reading-gradient: linear-gradient(
     90deg,
     color-mix(in srgb, var(--secondary) 78%, #eff6ff 22%),
@@ -49,13 +55,6 @@ body::before {
   background:
     radial-gradient(circle at 18% 22%, rgba(255, 255, 255, 0.34), rgba(255, 255, 255, 0)),
     linear-gradient(180deg, rgba(248, 250, 252, 0.26), rgba(15, 23, 42, 0.2));
-}
-
-:root[data-bg-ready="on"] body::before {
-  background-image: url("./static/background.png");
-  background-repeat: no-repeat;
-  background-position: center center;
-  background-size: cover;
 }
 
 @media (prefers-reduced-data: reduce) {
@@ -410,9 +409,10 @@ body[data-slug="index"] .page > #quartz-body .center > article#main-content {
 }
 
 .page > #quartz-body .center article pre {
-  border: 1px solid color-mix(in srgb, var(--blog-line) 72%, transparent);
+  border: 1px solid var(--blog-code-border);
   border-radius: 12px;
-  background: color-mix(in srgb, var(--blog-shell-strong) 82%, var(--bg) 18%);
+  background: var(--blog-code-bg);
+  color: var(--blog-code-fg);
   box-shadow: 0 12px 28px rgba(0, 0, 0, 0.14);
 }
 

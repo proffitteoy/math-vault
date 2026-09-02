@@ -27,7 +27,7 @@ export default async function NoteShell({ note }: { note: NoteArtifact }) {
       <link rel="stylesheet" href="/quartz-assets/note.css" precedence="default" />
       <Navbar />
       <PageTransition>
-        <main className="mx-auto grid w-full max-w-[94rem] grid-cols-1 gap-5 px-4 pt-24 sm:px-6 lg:grid-cols-[16rem_minmax(0,1fr)] lg:gap-6 lg:px-8 xl:grid-cols-[17rem_minmax(0,1fr)_15rem]">
+        <main className="mx-auto grid w-full max-w-[94rem] grid-cols-1 gap-5 px-4 pt-24 sm:px-6 lg:grid-cols-[14rem_minmax(0,1fr)_12rem] lg:px-8 xl:grid-cols-[17rem_minmax(0,1fr)_15rem] xl:gap-6">
           <NoteExplorer
             section={note.section}
             tree={manifest.trees[note.section]}
@@ -100,7 +100,7 @@ export default async function NoteShell({ note }: { note: NoteArtifact }) {
             </div>
 
             {note.backlinks.length > 0 && (
-              <section className="mt-5 rounded-2xl border border-[#c7beb0] bg-[#f3f0ea] p-5 xl:hidden dark:border-[#343a44] dark:bg-[#1a1c20]">
+              <section className="mt-5 rounded-2xl border border-[#c7beb0] bg-[#f3f0ea] p-5 lg:hidden dark:border-[#343a44] dark:bg-[#1a1c20]">
                 <h2 className="flex items-center gap-2 text-sm font-black text-[#2b251d] dark:text-[#f2f4f7]">
                   <CornerUpLeft
                     className="h-4 w-4 text-[#3d5a80] dark:text-[#9ab5d8]"
@@ -124,7 +124,7 @@ export default async function NoteShell({ note }: { note: NoteArtifact }) {
             )}
           </section>
 
-          <aside className="hidden xl:block" aria-label="笔记辅助信息">
+          <aside className="hidden lg:block" aria-label="笔记辅助信息">
             <div className="sticky top-24 space-y-4">
               {note.toc.length > 0 && (
                 <nav className="rounded-2xl border border-[#c7beb0] bg-[#f3f0ea] p-5 shadow-[0_14px_38px_-28px_rgba(43,37,29,0.55)] dark:border-[#343a44] dark:bg-[#1a1c20]">

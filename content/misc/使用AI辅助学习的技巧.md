@@ -1,3 +1,7 @@
+---
+cover: "/chatter-covers/b65f6763bb10b5b4f84983ff25c5545.jpg"
+---
+
 ### 1. 使用AI学习的原则
 #### 1.1 核心原则
 
@@ -17,6 +21,3 @@
 ### 2. 不能让AI代替我们学习
 [Your Brain on ChatGPT: Accumulation of Cognitive Debt when Using an AI Assistant for Essay Writing Task](https://arxiv.org/pdf/2506.08872)这篇文章提到一个概念称之为“认知负债(cognitive debt)”，指的是：
 当工具代替我们大脑去完成一些认识任务的时候，短期看似乎效率得到了提升，但长期则像是滚雪球一样侵蚀我们的注意力，记忆力以及元认知能力。
----
-cover: "/chatter-covers/b65f6763bb10b5b4f84983ff25c5545.jpg"
----

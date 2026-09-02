@@ -1,3 +1,6 @@
+---
+cover: "/chatter-covers/1d7f1437d602eca442987d643f7bccc.jpg"
+---
 
 >[!tip]
 >Quartz 的部署本质上是一个静态站点生成过程，其核心在于将本地的 Markdown 知识拓扑结构映射为 Web 的 HTML 路由结构。
@@ -111,6 +114,3 @@ git push origin main
 #### 5.2 网站的日常防御
 
 常态化防御是一个常态化的过程，最主要的威胁来自于DNS劫持，即重定向
----
-cover: "/chatter-covers/1d7f1437d602eca442987d643f7bccc.jpg"
----

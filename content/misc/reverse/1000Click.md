@@ -1,3 +1,6 @@
+---
+cover: "/chatter-covers/572e879b89dc0c5f9dc0bcd51bca2c34.jpg"
+---
 
 我真狂点1000次干出来了
 
@@ -14,6 +17,3 @@
 .data:005C4BB7                 align 4
 ```
 发现只有一个被调用
----
-cover: "/chatter-covers/572e879b89dc0c5f9dc0bcd51bca2c34.jpg"
----
