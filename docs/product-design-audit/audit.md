@@ -118,7 +118,7 @@ P3：降低视觉层级重复
 验证：
 - `npm.cmd run lint`：通过，0 errors；剩余 16 个 warning 为既有 `<img>` 优化建议和 `obsidian-sync.config.mjs` 匿名默认导出提示。
 - `npm.cmd run typecheck`：通过。
-- `npm.cmd run build`：通过。Quartz 输出到 `public/blog`，Next.js 16.2.1 生产构建成功。
+- `npm.cmd run build`：通过。Quartz 临时输出写入 `.quartz-cache/quartz-site`，Next 使用的资源写入 `public/quartz-assets`，Next.js 16.2.1 生产构建成功。
 - 本地 3002 旧服务 `/` 与 `/music` 均返回 200；Browser DOM 检查首页确认 `#app-mount-root` 默认可见、无 Next 错误层、无页面 console error。`/music` 在该旧服务上 9 秒后仍停留在“唤醒音频引擎中...”，因此不作为最新构建截图证据。
 - `next start --port 3003` 前台诊断可在约 1 秒内 Ready；但沙箱外后台启动审批因额度限制被拒绝，未能用浏览器对最新 build 产物完成新截图验证。
 

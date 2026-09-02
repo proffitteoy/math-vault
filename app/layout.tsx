@@ -9,7 +9,6 @@ import { siteConfig } from "../siteConfig"
 import ClickEffect from "../components/ClickEffect"
 import BackgroundSlider from "../components/BackgroundSlider"
 import SplashScreen from "../components/SplashScreen"
-import DanmakuBackground from "../components/DanmakuBackground"
 
 import MobileBackButton from "../components/MobileBackButton"
 
@@ -77,30 +76,18 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
             >
               <div className="pointer-events-none fixed inset-0 z-0 overflow-hidden">
                 {!siteConfig.useGradient && <BackgroundSlider />}
-                <div className="absolute inset-0 z-[1] bg-white/[0.12] backdrop-blur-[1.5px] transition-colors duration-1000 dark:bg-slate-950/25"></div>
-
                 <div
-                  className="absolute inset-0 z-[2] transform-gpu opacity-25 mix-blend-soft-light transition-opacity duration-1000 dark:opacity-10"
+                  className="absolute inset-0 z-[1] bg-white/[0.12] transition-colors duration-1000 dark:bg-slate-950/25"
                   style={{
-                    background: `linear-gradient(-45deg, ${siteConfig.themeColors.join(", ")})`,
-                    backgroundSize: "400% 400%",
-                    animation: "gradientMove 15s ease infinite", // 🌟 全端保留渐变流动
+                    backgroundImage: `linear-gradient(135deg, ${siteConfig.themeColors
+                      .map((color) => `${color}24`)
+                      .join(", ")})`,
                   }}
-                ></div>
+                />
 
-                {/* 👇 🌟 优化：手机端去掉了 mix-blend-overlay，但保留了 blur 模糊光晕，确保视觉不打折 */}
-                <div className="absolute left-[-10%] top-[-10%] z-[3] h-[40%] w-[40%] rounded-full bg-white/25 blur-[100px] dark:bg-indigo-900/15 md:mix-blend-overlay"></div>
-                <div className="absolute bottom-[-10%] right-[-10%] z-[3] h-[40%] w-[40%] rounded-full bg-indigo-400/20 blur-[100px] dark:bg-purple-900/20 md:mix-blend-overlay"></div>
-
-                {/* 隐藏手机端高负载粒子特效 */}
-                <div className="absolute inset-0 z-[4] hidden h-full w-full md:block">
+                <div className="absolute inset-0 z-[2] hidden h-full w-full md:block">
                   <BackgroundEffects />
                 </div>
-              </div>
-
-              {/* 隐藏手机端弹幕 */}
-              <div className="hidden md:block">
-                <DanmakuBackground />
               </div>
 
               <div className="relative z-10 flex-1 flex flex-col">{children}</div>
@@ -119,18 +106,6 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
               </div>
             </div>
 
-            <style
-              suppressHydrationWarning
-              dangerouslySetInnerHTML={{
-                __html: `
-              @keyframes gradientMove { 
-                0% { background-position: 0% 50%; } 
-                50% { background-position: 100% 50%; } 
-                100% { background-position: 0% 50%; } 
-              }
-            `,
-              }}
-            />
           </MusicProvider>
         </ThemeProvider>
       </body>
