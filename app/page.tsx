@@ -1,6 +1,8 @@
 import fs from "fs"
 import path from "path"
+import { connection } from "next/server"
 
+import { getAnimeShelf } from "./anime/bangumi"
 import Navbar from "../components/Navbar"
 import PageTransition from "../components/PageTransition"
 import { siteConfig } from "../siteConfig"
@@ -31,11 +33,15 @@ function countQuartzPages(directory: string) {
   return total
 }
 
-export default function Home() {
+export default async function Home() {
+  await connection()
   const quartzBlogDir = path.join(process.cwd(), "public", "blog")
   const quartzMiscDir = path.join(quartzBlogDir, "misc")
   const chatterCount = countQuartzPages(quartzMiscDir)
   const blogCount = Math.max(0, countQuartzPages(quartzBlogDir) - chatterCount)
+  const animeShelf = await getAnimeShelf()
+  const animeCount =
+    animeShelf.status === "ready" ? animeShelf.watching.total + animeShelf.watched.total : null
 
   return (
     <ToastProvider>
@@ -53,7 +59,7 @@ export default function Home() {
                     postCount={blogCount}
                     chatterCount={chatterCount}
                     musicCount={siteConfig.cloudMusicIds.length}
-                    animeCount={null}
+                    animeCount={animeCount}
                   />
                 </div>
                 {/* 手机上占满1列，电脑上占5列 */}

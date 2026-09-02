@@ -1,15 +1,63 @@
 "use client";
 
+import { useEffect, useMemo, useRef } from 'react';
 import { motion } from 'framer-motion';
+import { Activity } from 'lucide-react';
 import { siteConfig } from '../siteConfig';
 
 export default function AboutClient({
   contentHtml,
   coverImage,
+  activityDates,
 }: {
   contentHtml: string,
   coverImage: string,
+  activityDates: string[],
 }) {
+  const heatmapScrollRef = useRef<HTMLDivElement>(null);
+  const { weeks, activityMap, activityCount } = useMemo(() => {
+    const endDate = new Date();
+    endDate.setHours(0, 0, 0, 0);
+    const startDate = new Date(endDate);
+    startDate.setDate(endDate.getDate() - 364);
+    startDate.setDate(startDate.getDate() - startDate.getDay());
+
+    const weeks: Date[][] = [];
+    let currentWeek: Date[] = [];
+    const cursor = new Date(startDate);
+    while (cursor <= endDate) {
+      currentWeek.push(new Date(cursor));
+      if (currentWeek.length === 7) {
+        weeks.push(currentWeek);
+        currentWeek = [];
+      }
+      cursor.setDate(cursor.getDate() + 1);
+    }
+    if (currentWeek.length > 0) weeks.push(currentWeek);
+
+    const activityMap: Record<string, number> = {};
+    for (const value of activityDates) {
+      const date = new Date(value);
+      if (Number.isNaN(date.getTime()) || date < startDate || date > endDate) continue;
+      const key = getLocalDateKey(date);
+      activityMap[key] = (activityMap[key] ?? 0) + 1;
+    }
+
+    return {
+      weeks,
+      activityMap,
+      activityCount: Object.values(activityMap).reduce((total, count) => total + count, 0),
+    };
+  }, [activityDates]);
+
+  useEffect(() => {
+    const frame = requestAnimationFrame(() => {
+      const element = heatmapScrollRef.current;
+      if (element) element.scrollLeft = element.scrollWidth;
+    });
+    return () => cancelAnimationFrame(frame);
+  }, []);
+
   return (
     <div className="bg-white/60 dark:bg-slate-800/50 backdrop-blur-xl rounded-[40px] shadow-2xl border border-white/40 dark:border-white/10 overflow-hidden transition-colors duration-700 relative">
 
@@ -88,9 +136,128 @@ export default function AboutClient({
                 `}</style>
                 <div className="prose prose-slate dark:prose-invert prose-base md:prose-lg max-w-none text-slate-800 dark:text-slate-200 font-serif transition-colors duration-700 leading-relaxed scroll-smooth" dangerouslySetInnerHTML={{ __html: contentHtml }} />
               </div>
+              <section
+                className="mt-12 rounded-3xl border border-slate-200/60 bg-slate-50/55 p-5 shadow-inner dark:border-white/5 dark:bg-slate-950/30 md:mt-16 md:p-8"
+                aria-labelledby="activity-heatmap-title"
+              >
+                <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
+                  <h2
+                    id="activity-heatmap-title"
+                    className="flex items-center gap-2 text-lg font-black text-slate-800 dark:text-white"
+                  >
+                    <Activity className="h-5 w-5 text-green-500" aria-hidden="true" />
+                    过去一年 {activityCount} 次笔记更新
+                  </h2>
+                  <a
+                    href={siteConfig.social.github}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-xs font-black text-indigo-600 hover:text-indigo-500 dark:text-indigo-300"
+                  >
+                    GitHub 主页 ↗
+                  </a>
+                </div>
+
+                <div className="flex gap-2">
+                  <div className="flex shrink-0 flex-col" aria-hidden="true">
+                    <div className="mb-1 h-4" />
+                    <div className="flex flex-col gap-1 text-[10px] text-slate-400">
+                      <div className="h-[11px] md:h-[13px]" />
+                      <div className="flex h-[11px] items-center leading-none md:h-[13px]">Mon</div>
+                      <div className="h-[11px] md:h-[13px]" />
+                      <div className="flex h-[11px] items-center leading-none md:h-[13px]">Wed</div>
+                      <div className="h-[11px] md:h-[13px]" />
+                      <div className="flex h-[11px] items-center leading-none md:h-[13px]">Fri</div>
+                      <div className="h-[11px] md:h-[13px]" />
+                    </div>
+                  </div>
+
+                  <div
+                    ref={heatmapScrollRef}
+                    className="min-w-0 flex-1 overflow-x-auto pb-4 scroll-smooth"
+                  >
+                    <div className="min-w-[700px]">
+                      <div
+                        className="mb-1 flex h-4 gap-1 text-[10px] text-slate-400"
+                        aria-hidden="true"
+                      >
+                        {weeks.map((week, index) => {
+                          const firstDay = week[0];
+                          return (
+                            <div key={index} className="relative w-[11px] shrink-0 md:w-[13px]">
+                              {firstDay.getDate() <= 7 && (
+                                <span className="absolute left-0 whitespace-nowrap">
+                                  {firstDay.toLocaleString("en-US", { month: "short" })}
+                                </span>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+
+                      <div className="flex gap-1" aria-label="过去一年的笔记更新日历">
+                        {weeks.map((week, weekIndex) => (
+                          <div key={weekIndex} className="flex flex-col gap-1">
+                            {week.map((day) => {
+                              const dateKey = getLocalDateKey(day);
+                              const count = activityMap[dateKey] ?? 0;
+                              const label = dateKey + ": " + count + " 次更新";
+                              return (
+                                <span
+                                  key={dateKey}
+                                  role="img"
+                                  title={label}
+                                  aria-label={label}
+                                  className={
+                                    "h-[11px] w-[11px] rounded-[3px] transition hover:ring-2 hover:ring-indigo-500/50 md:h-[13px] md:w-[13px] " +
+                                    getActivityColor(count)
+                                  }
+                                />
+                              );
+                            })}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div
+                  className="mt-2 flex items-center justify-end gap-2 text-[10px] font-bold text-slate-500 md:text-xs"
+                  aria-hidden="true"
+                >
+                  Less
+                  {[0, 1, 2, 3, 4].map((count) => (
+                    <span
+                      key={count}
+                      className={"h-[11px] w-[11px] rounded-[3px] " + getActivityColor(count)}
+                    />
+                  ))}
+                  More
+                </div>
+              </section>
         </motion.div>
 
       </div>
     </div>
   );
+}
+
+function getLocalDateKey(date: Date) {
+  const pad = (value: number) => value.toString().padStart(2, "0");
+  return (
+    date.getFullYear() +
+    "-" +
+    pad(date.getMonth() + 1) +
+    "-" +
+    pad(date.getDate())
+  );
+}
+
+function getActivityColor(count: number) {
+  if (count === 0) return "bg-slate-200/75 dark:bg-slate-800/70";
+  if (count === 1) return "bg-green-300 dark:bg-green-900";
+  if (count === 2) return "bg-green-400 dark:bg-green-700";
+  if (count === 3) return "bg-green-500 dark:bg-green-600";
+  return "bg-green-600 dark:bg-green-500";
 }

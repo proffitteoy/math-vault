@@ -26,6 +26,7 @@ export type NoteArtifact = {
   sourcePath: string
   title: string
   description: string
+  cover?: string
   dates: {
     created?: string
     modified?: string

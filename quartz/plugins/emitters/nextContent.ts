@@ -63,6 +63,16 @@ function isExternalUrl(value: string): boolean {
   return /^(?:[a-z][a-z\d+.-]*:|\/\/)/i.test(value)
 }
 
+export function resolveNoteCover(slug: string, value: unknown): string | undefined {
+  if (typeof value !== "string" || !value.trim()) return undefined
+
+  const cover = value.trim()
+  if (cover.startsWith("/") || isExternalUrl(cover)) return cover
+
+  const assetPath = resolveContentPath(slug, cover).split("#", 1)[0]
+  return "/quartz-assets/content/" + assetPath
+}
+
 function rewriteTree(tree: Root, fileData: QuartzPluginData) {
   const copy = structuredClone(tree)
   const assets = new Set<string>()
@@ -325,7 +335,8 @@ function buildArtifact(
     route,
     sourcePath: fileData.relativePath!,
     title: fileData.frontmatter?.title ?? simplifySlug(fileData.slug!),
-    description: "",
+    description: fileData.description ?? "",
+    cover: resolveNoteCover(fileData.slug!, fileData.frontmatter?.socialImage),
     dates: {
       created: toIsoString(fileData.dates?.created),
       modified: toIsoString(fileData.dates?.modified),

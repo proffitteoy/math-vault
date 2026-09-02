@@ -1,7 +1,7 @@
 import assert from "node:assert/strict"
 import { describe, it } from "node:test"
 
-import { getNoteRoute, getNoteSection } from "./nextContent"
+import { getNoteRoute, getNoteSection, resolveNoteCover } from "./nextContent"
 
 describe("Next content artifact routes", () => {
   it("maps ordinary notes to readable blog routes", () => {
@@ -17,5 +17,16 @@ describe("Next content artifact routes", () => {
 
   it("keeps aliases in the target section when they have no misc prefix", () => {
     assert.equal(getNoteRoute("旧标题", "chatter"), "/chatter/旧标题")
+  })
+
+  it("keeps remote covers and rewrites note-local covers to public assets", () => {
+    assert.equal(
+      resolveNoteCover("misc/随笔/九月", "https://images.example/cover.webp"),
+      "https://images.example/cover.webp",
+    )
+    assert.equal(
+      resolveNoteCover("misc/随笔/九月", "./images/cover.webp"),
+      "/quartz-assets/content/misc/随笔/images/cover.webp",
+    )
   })
 })

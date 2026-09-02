@@ -18,6 +18,7 @@ import 'katex/dist/katex.min.css';
 import Navbar from '../../components/Navbar';
 import PageTransition from '../../components/PageTransition';
 import AboutClient from '../../components/AboutClient';
+import { getSectionNotes } from '../../lib/notes/server';
 import { Suspense } from 'react';
 
 export default async function AboutPage() {
@@ -72,6 +73,14 @@ export default async function AboutPage() {
   } catch (e) {
     console.error("读取 about.md 失败", e);
   }
+
+  const [blogNotes, chatterNotes] = await Promise.all([
+    getSectionNotes('blog'),
+    getSectionNotes('chatter'),
+  ]);
+  const activityDates = [...blogNotes, ...chatterNotes]
+    .map((note) => note.dates.modified ?? note.dates.created ?? note.dates.published)
+    .filter((date): date is string => Boolean(date));
 
   return (
     <div className="min-h-screen relative pb-20">
@@ -195,6 +204,7 @@ export default async function AboutPage() {
             <AboutClient
               contentHtml={contentHtml}
               coverImage={coverImage}
+              activityDates={activityDates}
             />
           </Suspense>
         </main>
