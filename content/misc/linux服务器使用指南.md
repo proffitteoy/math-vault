@@ -302,3 +302,6 @@ sudo nmcli networking off
 控制台执行 ES API（Dev Tools）  
 仪表盘（Dashboard）  
 索引管理、用户权限管理
+---
+cover: "/chatter-covers/457d5392ba7855fa584a4975b693d987cd74b8b0.jpg"
+---

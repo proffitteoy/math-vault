@@ -20,10 +20,6 @@ function ExplorerFolder({ node, currentPath }: { node: NoteTreeNode; currentPath
   const containsCurrent = containsPath(node, currentPath)
   const [open, setOpen] = useState(containsCurrent)
 
-  useEffect(() => {
-    if (containsCurrent) setOpen(true)
-  }, [containsCurrent])
-
   return (
     <li>
       <details
@@ -45,7 +41,7 @@ function ExplorerFolder({ node, currentPath }: { node: NoteTreeNode; currentPath
         <ul className="ml-[0.9rem] border-l border-[#c7beb0] pl-2 dark:border-[#343a44]">
           {node.children?.map((child) => (
             <ExplorerNode
-              key={`${child.type}-${child.path}`}
+              key={`${child.type}-${child.path}-${currentPath}`}
               node={child}
               currentPath={currentPath}
             />
@@ -240,7 +236,7 @@ function ExplorerPanel({
           <ul className="space-y-0.5" aria-label={`${sectionTitle}目录树`}>
             {tree.map((node) => (
               <ExplorerNode
-                key={`${node.type}-${node.path}`}
+                key={`${node.type}-${node.path}-${currentPath}`}
                 node={node}
                 currentPath={currentPath}
               />

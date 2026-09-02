@@ -111,3 +111,6 @@ git push origin main
 #### 5.2 网站的日常防御
 
 常态化防御是一个常态化的过程，最主要的威胁来自于DNS劫持，即重定向
+---
+cover: "/chatter-covers/1d7f1437d602eca442987d643f7bccc.jpg"
+---

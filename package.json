@@ -99,6 +99,7 @@
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "@types/source-map-support": "^0.5.10",
+    "@types/three": "^0.184.1",
     "esbuild": "^0.27.0",
     "eslint": "^9",
     "eslint-config-next": "16.2.1",
