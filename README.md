@@ -37,7 +37,7 @@
 | 交互与视觉 | Framer Motion、Three.js、React Three Fiber、PixiJS |
 | 内容系统   | Markdown、KaTeX、Shiki、FlexSearch                 |
 | 编辑与数据 | Tiptap、本地 TypeScript 数据文件                   |
-| 工程化     | ESLint、Prettier、Docker、Vercel                   |
+| 工程化     | ESLint、Prettier、Vercel                           |
 
 ## 快速开始
 
@@ -81,7 +81,7 @@ npm run dev
 - 博客与公开知识库内容：`content/`
 - 自动化与 Obsidian 同步：`scripts/`、`obsidian-sync.config.mjs`
 
-`public/blog/` 是构建产物，请不要手动修改。若采用 Obsidian 写作，请先阅读[同步说明](./docs/project/obsidian-sync.md)；不使用 Obsidian 时，直接维护 `content/` 即可。
+`.quartz-cache/next/` 与 `public/quartz-assets/` 是构建产物，请不要手动修改。若采用 Obsidian 写作，请先阅读[同步说明](./docs/project/obsidian-sync.md)；不使用 Obsidian 时，直接维护 `content/` 即可。
 
 ## 项目结构
 
@@ -92,7 +92,8 @@ npm run dev
 ├── content/                # 博客和知识库源内容
 ├── data/                   # 项目、友链等站点数据
 ├── docs/project/           # 本仓库专属维护文档
-├── public/                 # 公共资源与生成后的博客站点
+├── public/                 # 公共资源与生成后的笔记资源
+├── quartz/                 # 精简后的笔记解析与产物生成器
 ├── scripts/                # 同步和维护脚本
 ├── siteConfig.ts           # 全站配置中心
 └── obsidian-sync.config.mjs # 内容同步配置
@@ -102,7 +103,6 @@ npm run dev
 
 推荐直接使用 Vercel 部署：导入仓库后将 **Root Directory 保持为仓库根目录**，构建命令使用 `npm run build`。该命令会先生成静态内容，再构建 Next.js 主站。
 
-也可以使用仓库中的 `Dockerfile` 自行构建镜像。
 
 ## 参与贡献
 
@@ -113,7 +113,7 @@ npm run dev
 3. 提交前运行 `npm run lint`、`npm run typecheck`，涉及构建流程时再运行 `npm run build`。
 4. 提交 Pull Request，说明动机、变更范围和验证结果；界面变更请附截图。
 
-参与前请遵守[社区行为准则](./CODE_OF_CONDUCT.md)。问题与建议可通过 [GitHub Issues](https://github.com/proffitteoy/math-vault/issues) 提交。
+问题与建议可通过 [GitHub Issues](https://github.com/proffitteoy/math-vault/issues) 提交。
 
 ## 常见问题
 
@@ -127,7 +127,7 @@ npm.cmd run dev
 
 ### 博客内容没有更新
 
-确认修改的是 `content/` 源文件，然后重新运行 `npm run quartz:build:site`。不要直接编辑 `public/blog/`。
+确认修改的是 `content/` 源文件，然后重新运行 `npm run notes:build`。不要直接编辑 `.quartz-cache/next/` 或 `public/quartz-assets/`。
 
 ## 许可证与致谢
 

@@ -16,11 +16,10 @@ export default async function ChatterPage() {
   const chatters = notes.map((note) => ({
     route: note.route,
     title: note.title,
-    description: note.description || note.text.slice(0, 180),
-    searchText: note.text,
-    date: note.dates.modified ?? note.dates.created ?? note.dates.published,
-    tags: note.tags,
-    cover: note.cover,
+    cover:
+      note.cover ??
+      note.assets.find((asset) => /\.(avif|gif|jpe?g|png|webp)$/i.test(asset)) ??
+      siteConfig.defaultPostCover,
   }))
 
   return (

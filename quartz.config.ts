@@ -1,5 +1,16 @@
 import { QuartzConfig } from "./quartz/cfg"
-import * as Plugin from "./quartz/plugins"
+import { ComponentResources } from "./quartz/plugins/emitters/componentResources"
+import { NextContentArtifacts } from "./quartz/plugins/emitters/nextContent"
+import { RemoveDrafts } from "./quartz/plugins/filters/draft"
+import { Description } from "./quartz/plugins/transformers/description"
+import { FrontMatter } from "./quartz/plugins/transformers/frontmatter"
+import { GitHubFlavoredMarkdown } from "./quartz/plugins/transformers/gfm"
+import { CreatedModifiedDate } from "./quartz/plugins/transformers/lastmod"
+import { Latex } from "./quartz/plugins/transformers/latex"
+import { CrawlLinks } from "./quartz/plugins/transformers/links"
+import { ObsidianFlavoredMarkdown } from "./quartz/plugins/transformers/ofm"
+import { SyntaxHighlighting } from "./quartz/plugins/transformers/syntax"
+import { TableOfContents } from "./quartz/plugins/transformers/toc"
 
 const config: QuartzConfig = {
   configuration: {
@@ -49,41 +60,26 @@ const config: QuartzConfig = {
   },
   plugins: {
     transformers: [
-      Plugin.FrontMatter(),
-      Plugin.CreatedModifiedDate({
+      FrontMatter(),
+      CreatedModifiedDate({
         priority: ["frontmatter", "git", "filesystem"],
       }),
-      Plugin.SyntaxHighlighting({
+      SyntaxHighlighting({
         theme: {
           light: "github-light",
           dark: "github-dark",
         },
         keepBackground: false,
       }),
-      Plugin.ObsidianFlavoredMarkdown({ enableInHtmlEmbed: false }),
-      Plugin.GitHubFlavoredMarkdown(),
-      Plugin.TableOfContents(),
-      Plugin.CrawlLinks({ markdownLinkResolution: "shortest" }),
-      Plugin.Description(),
-      Plugin.Latex({ renderEngine: "katex" }),
+      ObsidianFlavoredMarkdown({ enableInHtmlEmbed: false }),
+      GitHubFlavoredMarkdown(),
+      TableOfContents(),
+      CrawlLinks({ markdownLinkResolution: "shortest" }),
+      Description(),
+      Latex({ renderEngine: "katex" }),
     ],
-    filters: [Plugin.RemoveDrafts()],
-    emitters: [
-      Plugin.AliasRedirects(),
-      Plugin.ComponentResources(),
-      Plugin.ContentPage(),
-      Plugin.FolderPage(),
-      Plugin.TagPage(),
-      Plugin.ContentIndex({
-        enableSiteMap: true,
-        enableRSS: true,
-      }),
-      Plugin.NextContentArtifacts(),
-      Plugin.Assets(),
-      Plugin.Static(),
-      Plugin.Favicon(),
-      Plugin.NotFoundPage(),
-    ],
+    filters: [RemoveDrafts()],
+    emitters: [ComponentResources(), NextContentArtifacts()],
   },
 }
 

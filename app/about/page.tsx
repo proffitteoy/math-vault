@@ -14,14 +14,64 @@ import rehypeStringify from 'rehype-stringify';
 // 引入高亮主题
 import 'highlight.js/styles/atom-one-dark.css';
 import 'katex/dist/katex.min.css';
+import { connection } from 'next/server';
 
 import Navbar from '../../components/Navbar';
 import PageTransition from '../../components/PageTransition';
-import AboutClient from '../../components/AboutClient';
-import { getSectionNotes } from '../../lib/notes/server';
+import AboutClient, { type GitHubContributions } from '../../components/AboutClient';
 import { Suspense } from 'react';
 
+const GITHUB_CONTRIBUTIONS_URL = 'https://github.com/users/proffitteoy/contributions';
+
+export const revalidate = 43200;
+
+async function getGitHubContributions(): Promise<GitHubContributions | null> {
+  try {
+    const response = await fetch(GITHUB_CONTRIBUTIONS_URL, {
+      headers: {
+        Accept: 'text/html',
+        'User-Agent': 'nothing-new.icu',
+      },
+      next: { revalidate: 43200 },
+    });
+
+    if (!response.ok) {
+      throw new Error(`GitHub contributions returned ${response.status}`);
+    }
+
+    const html = await response.text();
+    const totalMatch = html.match(/([\d,]+)\s+contributions?\s+in the last year/i);
+    const total = totalMatch ? Number(totalMatch[1].replaceAll(',', '')) : Number.NaN;
+    const daysByDate = new Map<string, GitHubContributions['days'][number]>();
+
+    for (const cell of html.matchAll(/<td\b[^>]*>/gi)) {
+      const dateMatch = cell[0].match(/\bdata-date="(\d{4}-\d{2}-\d{2})"/i);
+      const levelMatch = cell[0].match(/\bdata-level="([0-4])"/i);
+      if (!dateMatch || !levelMatch) continue;
+
+      daysByDate.set(dateMatch[1], {
+        date: dateMatch[1],
+        level: Number(levelMatch[1]) as 0 | 1 | 2 | 3 | 4,
+      });
+    }
+
+    if (!Number.isFinite(total) || daysByDate.size === 0) {
+      throw new Error('GitHub contributions response format changed');
+    }
+
+    return {
+      total,
+      days: [...daysByDate.values()].sort((left, right) => left.date.localeCompare(right.date)),
+    };
+  } catch (error) {
+    console.error('读取 GitHub 贡献数据失败', error);
+    return null;
+  }
+}
+
 export default async function AboutPage() {
+  await connection();
+
   const fullPath = path.join(process.cwd(), 'app', 'about', 'about.md');
   let contentHtml = "博主很懒，还没有写自我介绍哦...";
   let coverImage = "https://bu.dusays.com/2026/03/24/69c23dc278c78.jpg";
@@ -74,13 +124,7 @@ export default async function AboutPage() {
     console.error("读取 about.md 失败", e);
   }
 
-  const [blogNotes, chatterNotes] = await Promise.all([
-    getSectionNotes('blog'),
-    getSectionNotes('chatter'),
-  ]);
-  const activityDates = [...blogNotes, ...chatterNotes]
-    .map((note) => note.dates.modified ?? note.dates.created ?? note.dates.published)
-    .filter((date): date is string => Boolean(date));
+  const githubContributions = await getGitHubContributions();
 
   return (
     <div className="min-h-screen relative pb-20">
@@ -204,7 +248,7 @@ export default async function AboutPage() {
             <AboutClient
               contentHtml={contentHtml}
               coverImage={coverImage}
-              activityDates={activityDates}
+              githubContributions={githubContributions}
             />
           </Suspense>
         </main>

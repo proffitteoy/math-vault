@@ -24,8 +24,6 @@
   },
   "include": [
     "next-env.d.ts",
-    "globals.d.ts",
-    "index.d.ts",
     "app/**/*.ts",
     "app/**/*.tsx",
     "components/**/*.ts",
@@ -36,5 +34,5 @@
     ".next/types/**/*.ts",
     ".next/dev/types/**/*.ts"
   ],
-  "exclude": ["node_modules", "my-portfolio", "quartz", "docs", "public"]
+  "exclude": ["node_modules", "quartz", "public"]
 }

@@ -1,72 +1,24 @@
-import remarkMath from "remark-math"
+import type { KatexOptions } from "katex"
 import rehypeKatex from "rehype-katex"
-import rehypeMathjax from "rehype-mathjax/svg"
-//@ts-ignore
-import rehypeTypst from "@myriaddreamin/rehype-typst"
-import { QuartzTransformerPlugin } from "../types"
-import { KatexOptions } from "katex"
-import { Options as MathjaxOptions } from "rehype-mathjax/svg"
-//@ts-ignore
-import { Options as TypstOptions } from "@myriaddreamin/rehype-typst"
-import fs from "fs"
-import { createRequire } from "module"
+import remarkMath from "remark-math"
 
-const require = createRequire(import.meta.url)
-const katexCopyTexScript = fs.readFileSync(
-  require.resolve("katex/dist/contrib/copy-tex.min.js"),
-  "utf8",
-)
+import type { QuartzTransformerPlugin } from "../types"
 
 interface Options {
-  renderEngine: "katex" | "mathjax" | "typst"
-  customMacros: MacroType
+  renderEngine: "katex"
+  customMacros: Record<string, string>
   katexOptions: Omit<KatexOptions, "macros" | "output">
-  mathJaxOptions: Omit<MathjaxOptions, "macros">
-  typstOptions: TypstOptions
 }
 
-interface MacroType {
-  [key: string]: string
-}
-
-export const Latex: QuartzTransformerPlugin<Partial<Options>> = (opts) => {
-  const engine = opts?.renderEngine ?? "katex"
-  const macros = opts?.customMacros ?? {}
+export const Latex: QuartzTransformerPlugin<Partial<Options>> = (options) => {
+  const macros = options?.customMacros ?? {}
   return {
     name: "Latex",
     markdownPlugins() {
       return [remarkMath]
     },
     htmlPlugins() {
-      switch (engine) {
-        case "katex": {
-          return [[rehypeKatex, { output: "html", macros, ...(opts?.katexOptions ?? {}) }]]
-        }
-        case "typst": {
-          return [[rehypeTypst, opts?.typstOptions ?? {}]]
-        }
-        case "mathjax": {
-          return [[rehypeMathjax, { macros, ...(opts?.mathJaxOptions ?? {}) }]]
-        }
-        default: {
-          return [[rehypeMathjax, { macros, ...(opts?.mathJaxOptions ?? {}) }]]
-        }
-      }
-    },
-    externalResources() {
-      switch (engine) {
-        case "katex":
-          return {
-            js: [
-              {
-                // fix copy behaviour: https://github.com/KaTeX/KaTeX/blob/main/contrib/copy-tex/README.md
-                script: katexCopyTexScript,
-                loadTime: "afterDOMReady",
-                contentType: "inline",
-              },
-            ],
-          }
-      }
+      return [[rehypeKatex, { output: "html", macros, ...(options?.katexOptions ?? {}) }]]
     },
   }
 }

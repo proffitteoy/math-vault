@@ -1,5 +1,3 @@
-import fs from "fs"
-import path from "path"
 import { connection } from "next/server"
 
 import { getAnimeShelf } from "./anime/bangumi"
@@ -12,34 +10,14 @@ import SiteDashboard from "../components/SiteDashboard"
 import LyricBar from "../components/LyricBar"
 import HomeStoryBoard from "../components/HomeStoryBoard"
 import { ToastProvider } from "../components/ToastProvider"
-
-function countQuartzPages(directory: string) {
-  if (!fs.existsSync(directory)) return 0
-
-  let total = 0
-  for (const entry of fs.readdirSync(directory, { withFileTypes: true })) {
-    const fullPath = path.join(directory, entry.name)
-    if (entry.isDirectory()) {
-      total += countQuartzPages(fullPath)
-    } else if (
-      entry.name.endsWith(".html") &&
-      entry.name !== "index.html" &&
-      entry.name !== "404.html"
-    ) {
-      total += 1
-    }
-  }
-
-  return total
-}
+import { getNoteManifest } from "../lib/notes/server"
 
 export default async function Home() {
   await connection()
-  const quartzBlogDir = path.join(process.cwd(), "public", "blog")
-  const quartzMiscDir = path.join(quartzBlogDir, "misc")
-  const chatterCount = countQuartzPages(quartzMiscDir)
-  const blogCount = Math.max(0, countQuartzPages(quartzBlogDir) - chatterCount)
-  const animeShelf = await getAnimeShelf()
+  const [manifest, animeShelf] = await Promise.all([getNoteManifest(), getAnimeShelf()])
+  const routes = Object.keys(manifest.artifacts)
+  const blogCount = routes.filter((route) => route.startsWith("/blog/")).length
+  const chatterCount = routes.filter((route) => route.startsWith("/chatter/")).length
   const animeCount =
     animeShelf.status === "ready" ? animeShelf.watching.total + animeShelf.watched.total : null
 

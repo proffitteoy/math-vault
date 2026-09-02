@@ -15,7 +15,6 @@ const eslintConfig = defineConfig([
     ".sync/**",
     ".codex/**",
     "content/**",
-    "my-portfolio/**",
     "quartz/**",
     "public/**",
   ]),
