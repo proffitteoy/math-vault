@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 
+import { createHash } from "node:crypto"
 import fs from "node:fs/promises"
 import path from "node:path"
 import readline from "node:readline/promises"
@@ -71,6 +72,7 @@ async function loadConfig(configPath) {
     excludeFile,
     stateFile,
     reviewPatterns,
+    chatterRoots: normalizeRootPaths(rawConfig.chatterRoots ?? ["misc"]),
     defaultIgnores: normalizeGlobPatterns(
       rawConfig.defaultIgnores ?? [".obsidian/**", "**/.obsidian/**"],
     ),
@@ -130,9 +132,11 @@ async function initializeIncludeFile(config, state, options) {
 
   return {
     ...state,
-    version: 2,
+    version: 3,
     managedFiles: includeLines.slice(),
     discoveredNotes,
+    sourceFingerprints: state.sourceFingerprints ?? {},
+    protectedFiles: state.protectedFiles ?? [],
   }
 }
 
@@ -144,7 +148,7 @@ async function reviewUndecidedNotes(config, state, options) {
   if (!options.reviewAll && Object.keys(state.discoveredNotes).length === 0) {
     const nextState = {
       ...state,
-      version: 2,
+      version: 3,
       discoveredNotes: buildDiscoveredSnapshot(notes),
     }
     await writeState(config.stateFile, nextState)
@@ -176,7 +180,7 @@ async function reviewUndecidedNotes(config, state, options) {
   if (pendingNotes.length === 0) {
     const nextState = {
       ...state,
-      version: 2,
+      version: 3,
       discoveredNotes: buildDiscoveredSnapshot(notes),
     }
     await writeState(config.stateFile, nextState)
@@ -248,7 +252,7 @@ async function reviewUndecidedNotes(config, state, options) {
 
         const nextState = {
           ...state,
-          version: 2,
+          version: 3,
           discoveredNotes: mergeKnownNotes(state.discoveredNotes, nextDiscoveredNotes),
         }
         await writeState(config.stateFile, nextState)
@@ -269,7 +273,7 @@ async function reviewUndecidedNotes(config, state, options) {
 
   const nextState = {
     ...state,
-    version: 2,
+    version: 3,
     discoveredNotes: mergeKnownNotes(state.discoveredNotes, nextDiscoveredNotes),
   }
   await writeState(config.stateFile, nextState)
@@ -337,22 +341,52 @@ async function runSync(config, options) {
       sourcePath,
       rules.excludeEntries,
     )
+    const preserveAssets = isChatterPath(config, relativePath)
     for (const assetPath of assets) {
-      await registerDesiredFile(config, desiredFiles, assetPath)
+      await registerDesiredFile(config, desiredFiles, assetPath, {
+        preserveTarget: preserveAssets,
+      })
     }
   }
 
   const previousManagedFiles = new Set(options.state.managedFiles ?? [])
+  const previousProtectedFiles = new Set(options.state.protectedFiles ?? [])
+  const previousFingerprints = options.state.sourceFingerprints ?? {}
   const nextManagedFiles = new Set(desiredFiles.keys())
+  const nextProtectedFiles = new Set()
+  const nextFingerprints = {}
 
   const createOps = []
   const updateOps = []
   const unchangedOps = []
 
   for (const [relativePath, fileInfo] of desiredFiles) {
+    if (fileInfo.preserveTarget) {
+      nextProtectedFiles.add(relativePath)
+    }
+
     const existsInTarget = await fileExists(fileInfo.targetPath)
     if (!existsInTarget) {
       createOps.push({ relativePath, ...fileInfo })
+      if (fileInfo.mode === "chatter-markdown") {
+        nextFingerprints[relativePath] = await fingerprintFile(fileInfo.sourcePath)
+      }
+      continue
+    }
+
+    if (fileInfo.mode === "chatter-markdown") {
+      const fingerprint = await fingerprintFile(fileInfo.sourcePath)
+      nextFingerprints[relativePath] = fingerprint
+      if (previousFingerprints[relativePath] === fingerprint) {
+        unchangedOps.push({ relativePath, ...fileInfo })
+      } else {
+        updateOps.push({ relativePath, ...fileInfo })
+      }
+      continue
+    }
+
+    if (fileInfo.preserveTarget) {
+      unchangedOps.push({ relativePath, ...fileInfo })
       continue
     }
 
@@ -365,8 +399,14 @@ async function runSync(config, options) {
   }
 
   const deleteOps = []
+  let protectedDeleteCount = 0
   for (const relativePath of previousManagedFiles) {
     if (nextManagedFiles.has(relativePath)) {
+      continue
+    }
+
+    if (previousProtectedFiles.has(relativePath) || isChatterPath(config, relativePath)) {
+      protectedDeleteCount += 1
       continue
     }
 
@@ -384,6 +424,7 @@ async function runSync(config, options) {
     createCount: createOps.length,
     updateCount: updateOps.length,
     deleteCount: deleteOps.length,
+    protectedDeleteCount,
     dryRun: options.dryRun,
     check: options.check,
   })
@@ -406,7 +447,11 @@ async function runSync(config, options) {
 
   for (const operation of updateOps) {
     await ensureDirectory(path.dirname(operation.targetPath))
-    await fs.copyFile(operation.sourcePath, operation.targetPath)
+    if (operation.mode === "chatter-markdown") {
+      await updateChatterMarkdown(operation.sourcePath, operation.targetPath)
+    } else {
+      await fs.copyFile(operation.sourcePath, operation.targetPath)
+    }
   }
 
   for (const operation of deleteOps) {
@@ -415,8 +460,12 @@ async function runSync(config, options) {
 
   await writeState(config.stateFile, {
     ...options.state,
-    version: 2,
+    version: 3,
     managedFiles: Array.from(nextManagedFiles).sort((left, right) =>
+      left.localeCompare(right, "zh-CN"),
+    ),
+    sourceFingerprints: nextFingerprints,
+    protectedFiles: Array.from(nextProtectedFiles).sort((left, right) =>
       left.localeCompare(right, "zh-CN"),
     ),
   })
@@ -424,8 +473,11 @@ async function runSync(config, options) {
 
 function printSummary(summary) {
   const mode = summary.check ? "check" : summary.dryRun ? "dry-run" : "sync"
+  const protectedText = summary.protectedDeleteCount
+    ? `，保留加工文件 ${summary.protectedDeleteCount}`
+    : ""
   console.log(
-    `[obsidian-sync] ${mode}: 匹配 ${summary.matchedCount}，新增 ${summary.createCount}，更新 ${summary.updateCount}，删除 ${summary.deleteCount}，跳过 ${summary.unchangedCount}`,
+    `[obsidian-sync] ${mode}: 匹配 ${summary.matchedCount}，新增 ${summary.createCount}，更新 ${summary.updateCount}，删除 ${summary.deleteCount}，跳过 ${summary.unchangedCount}${protectedText}`,
   )
 }
 
@@ -455,13 +507,19 @@ async function readRuleFile(filePath) {
 
 async function readState(filePath) {
   if (!(await fileExists(filePath))) {
-    return { version: 2, managedFiles: [], discoveredNotes: {} }
+    return {
+      version: 3,
+      managedFiles: [],
+      discoveredNotes: {},
+      sourceFingerprints: {},
+      protectedFiles: [],
+    }
   }
 
   const content = await fs.readFile(filePath, "utf8")
   const state = JSON.parse(content)
   return {
-    version: state.version ?? 2,
+    version: state.version ?? 3,
     managedFiles: Array.isArray(state.managedFiles) ? state.managedFiles.map(toPosix) : [],
     discoveredNotes:
       state.discoveredNotes && typeof state.discoveredNotes === "object"
@@ -472,6 +530,18 @@ async function readState(filePath) {
             ]),
           )
         : {},
+    sourceFingerprints:
+      state.sourceFingerprints && typeof state.sourceFingerprints === "object"
+        ? Object.fromEntries(
+            Object.entries(state.sourceFingerprints).map(([relativePath, fingerprint]) => [
+              toPosix(relativePath),
+              String(fingerprint),
+            ]),
+          )
+        : {},
+    protectedFiles: Array.isArray(state.protectedFiles)
+      ? state.protectedFiles.map(toPosix)
+      : [],
   }
 }
 
@@ -537,12 +607,8 @@ function matchesRule(relativePath, entry) {
   return minimatch(relativePath, entry.value, { dot: true })
 }
 
-async function registerDesiredFile(config, desiredFiles, relativePath) {
+async function registerDesiredFile(config, desiredFiles, relativePath, options = {}) {
   const normalized = toPosix(relativePath)
-  if (desiredFiles.has(normalized)) {
-    return
-  }
-
   const sourcePath = path.resolve(config.sourceRoot, normalized)
   const targetPath = path.resolve(config.targetRoot, normalized)
 
@@ -553,7 +619,58 @@ async function registerDesiredFile(config, desiredFiles, relativePath) {
     return
   }
 
-  desiredFiles.set(normalized, { sourcePath, targetPath })
+  const chatterMarkdown =
+    normalized.toLowerCase().endsWith(".md") && isChatterPath(config, normalized)
+  const preserveTarget = chatterMarkdown || Boolean(options.preserveTarget)
+  const mode = chatterMarkdown ? "chatter-markdown" : "mirror"
+  const existing = desiredFiles.get(normalized)
+
+  desiredFiles.set(normalized, {
+    sourcePath,
+    targetPath,
+    mode: existing?.mode === "chatter-markdown" ? existing.mode : mode,
+    preserveTarget: Boolean(existing?.preserveTarget || preserveTarget),
+  })
+}
+
+function isChatterPath(config, relativePath) {
+  const normalized = toPosix(relativePath).replace(/^\/+|\/+$/gu, "")
+  return config.chatterRoots.some(
+    (root) => normalized === root || normalized.startsWith(`${root}/`),
+  )
+}
+
+async function updateChatterMarkdown(sourcePath, targetPath) {
+  const [sourceContent, targetContent] = await Promise.all([
+    fs.readFile(sourcePath, "utf8"),
+    fs.readFile(targetPath, "utf8"),
+  ])
+  const targetFrontmatter = extractFrontmatter(targetContent)
+  const sourceBody = stripFrontmatter(sourceContent).replace(/^\s*\n/u, "")
+
+  if (!targetFrontmatter) {
+    await fs.writeFile(targetPath, sourceContent, "utf8")
+    return
+  }
+
+  const separator = sourceBody.length > 0 ? "\n\n" : "\n"
+  await fs.writeFile(targetPath, `${targetFrontmatter}${separator}${sourceBody}`, "utf8")
+}
+
+function extractFrontmatter(content) {
+  const normalized = content.replace(/^\uFEFF/u, "")
+  const match = normalized.match(/^(---\r?\n[\s\S]*?\r?\n---)(?:\r?\n|$)/u)
+  return match?.[1] ?? null
+}
+
+function stripFrontmatter(content) {
+  const normalized = content.replace(/^\uFEFF/u, "")
+  return normalized.replace(/^---\r?\n[\s\S]*?\r?\n---(?:\r?\n|$)/u, "")
+}
+
+async function fingerprintFile(filePath) {
+  const content = await fs.readFile(filePath)
+  return createHash("sha256").update(content).digest("hex")
 }
 
 async function collectReferencedAssets(config, noteRelativePath, noteSourcePath, excludeEntries) {
@@ -726,6 +843,12 @@ function resolvePath(inputPath) {
 
 function normalizeGlobPatterns(patterns) {
   return patterns.map((pattern) => toPosix(pattern.trim())).filter(Boolean)
+}
+
+function normalizeRootPaths(paths) {
+  return paths
+    .map((root) => toPosix(String(root).trim()).replace(/^\/+|\/+$/gu, ""))
+    .filter(Boolean)
 }
 
 function normalizeRuleEntries(patterns) {
