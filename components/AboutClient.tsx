@@ -9,6 +9,7 @@ export type GitHubContributions = {
   total: number;
   days: {
     date: string;
+    count: number;
     level: 0 | 1 | 2 | 3 | 4;
   }[];
 };
@@ -189,7 +190,7 @@ export default function AboutClient({
                           {weeks.map((week, weekIndex) => (
                             <div key={weekIndex} className="flex flex-col gap-1">
                               {week.map((day) => {
-                                const label = `${day.date}: GitHub 活跃等级 ${day.level}`;
+                                const label = `${day.date}: ${day.count.toLocaleString("zh-CN")} 次 GitHub 贡献`;
                                 return (
                                   <span
                                     key={day.date}

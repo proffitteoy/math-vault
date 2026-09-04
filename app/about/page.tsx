@@ -42,15 +42,34 @@ async function getGitHubContributions(): Promise<GitHubContributions | null> {
     const html = await response.text();
     const totalMatch = html.match(/([\d,]+)\s+contributions?\s+in the last year/i);
     const total = totalMatch ? Number(totalMatch[1].replaceAll(',', '')) : Number.NaN;
+    const countsByCellId = new Map<string, number>();
+
+    for (const tooltip of html.matchAll(/<tool-tip\b([^>]*)>([\s\S]*?)<\/tool-tip>/gi)) {
+      const cellIdMatch = tooltip[1].match(/\bfor="([^"]+)"/i);
+      if (!cellIdMatch) continue;
+
+      const countMatch = tooltip[2].match(/([\d,]+)\s+contributions?/i);
+      if (countMatch) {
+        countsByCellId.set(cellIdMatch[1], Number(countMatch[1].replaceAll(',', '')));
+      } else if (/no contributions?/i.test(tooltip[2])) {
+        countsByCellId.set(cellIdMatch[1], 0);
+      }
+    }
+
     const daysByDate = new Map<string, GitHubContributions['days'][number]>();
 
     for (const cell of html.matchAll(/<td\b[^>]*>/gi)) {
       const dateMatch = cell[0].match(/\bdata-date="(\d{4}-\d{2}-\d{2})"/i);
+      const cellIdMatch = cell[0].match(/\bid="([^"]+)"/i);
       const levelMatch = cell[0].match(/\bdata-level="([0-4])"/i);
-      if (!dateMatch || !levelMatch) continue;
+      if (!dateMatch || !cellIdMatch || !levelMatch) continue;
+
+      const count = countsByCellId.get(cellIdMatch[1]);
+      if (count === undefined) continue;
 
       daysByDate.set(dateMatch[1], {
         date: dateMatch[1],
+        count,
         level: Number(levelMatch[1]) as 0 | 1 | 2 | 3 | 4,
       });
     }

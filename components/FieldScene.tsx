@@ -90,6 +90,7 @@ uniform int uObstacleCount;
 out float vAlpha;
 out float vTheme;
 out float vShade;
+out float vAcross;
 
 float hash11(float value) {
   return fract(sin(value * 127.1) * 43758.5453123);
@@ -168,15 +169,23 @@ void main() {
   }
 
   vec2 direction = normalize(velocity + vec2(0.0001));
+  vec2 normal = vec2(-direction.y, direction.x);
   float speed = length(velocity);
-  float lengthPx = aMeta.z + 3.0 * speed / (1.0 + speed);
+  float lengthPx = 4.0 + hash11(aMeta.x * 4.19) * 10.0 + 3.0 * speed / (1.0 + speed);
+  float widthPx = 0.65 + hash11(aMeta.x * 8.73) * 0.55;
   vec2 pixelToClip = vec2(2.0 / uResolution.x, 2.0 / uResolution.y);
-  position += direction * aMeta.y * lengthPx * 0.5 * pixelToClip;
+  position +=
+    (
+      direction * aMeta.y * lengthPx * 0.5 +
+      normal * aMeta.z * widthPx * 0.5
+    ) *
+    pixelToClip;
 
   gl_Position = vec4(position, 0.0, 1.0);
-  vAlpha = aMeta.w * fade * uAlpha * obstacleShade;
+  vAlpha = mix(0.06, 0.14, hash11(aMeta.x * 6.41)) * fade * uAlpha * obstacleShade;
   vTheme = uTheme;
   vShade = hash11(aMeta.x * 5.73);
+  vAcross = aMeta.z;
 }
 `
 
@@ -186,12 +195,14 @@ precision mediump float;
 in float vAlpha;
 in float vTheme;
 in float vShade;
+in float vAcross;
 out vec4 outColor;
 
 void main() {
   vec3 daylight = mix(vec3(0.25, 0.36, 0.55), vec3(0.58, 0.40, 0.63), vShade);
   vec3 night = mix(vec3(0.55, 0.72, 0.96), vec3(0.72, 0.82, 1.0), vShade);
-  outColor = vec4(mix(daylight, night, vTheme), vAlpha);
+  float edgeAlpha = 1.0 - smoothstep(0.72, 1.0, abs(vAcross));
+  outColor = vec4(mix(daylight, night, vTheme), vAlpha * edgeAlpha);
 }
 `
 
@@ -336,7 +347,16 @@ function createFieldRenderer(canvas: HTMLCanvasElement) {
   }
 
   const floatsPerVertex = 20
-  const vertices = new Float32Array(MAX_TRACERS * 2 * floatsPerVertex)
+  const verticesPerTracer = 6
+  const vertices = new Float32Array(MAX_TRACERS * verticesPerTracer * floatsPerVertex)
+  const quadCorners = [
+    [-1, -1],
+    [1, -1],
+    [1, 1],
+    [-1, -1],
+    [1, 1],
+    [-1, 1],
+  ] as const
   let cursor = 0
 
   for (let tracer = 0; tracer < MAX_TRACERS; tracer++) {
@@ -350,10 +370,8 @@ function createFieldRenderer(canvas: HTMLCanvasElement) {
     const amplitudeSum = rawAmplitudes.reduce((sum, amplitude) => sum + amplitude, 0)
     const amplitudes = rawAmplitudes.map((amplitude) => amplitude / amplitudeSum)
     const phases = MODE_INDICES.map((_, mode) => hash(tracer * 29 + mode, 36) * TAU)
-    const length = 4 + hash(tracer, 37) * 10
-    const alpha = 0.035 + hash(tracer, 38) * 0.105
 
-    for (const side of [-1, 1]) {
+    for (const [along, across] of quadCorners) {
       vertices.set(
         [
           centerX,
@@ -373,9 +391,9 @@ function createFieldRenderer(canvas: HTMLCanvasElement) {
           amplitudes[4],
           amplitudes[5],
           tracer + 1,
-          side,
-          length,
-          alpha,
+          along,
+          across,
+          0,
         ],
         cursor,
       )
@@ -494,7 +512,7 @@ function createFieldRenderer(canvas: HTMLCanvasElement) {
     gl.uniform1fv(uniforms.lambda, LAMBDAS)
     gl.uniform4fv(uniforms.obstacles, obstacleData)
     gl.uniform1i(uniforms.obstacleCount, Math.min(obstacles.length, MAX_OBSTACLES))
-    gl.drawArrays(gl.LINES, 0, Math.min(tracerCount, MAX_TRACERS) * 2)
+    gl.drawArrays(gl.TRIANGLES, 0, Math.min(tracerCount, MAX_TRACERS) * verticesPerTracer)
     gl.bindVertexArray(null)
   }
 

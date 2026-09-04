@@ -55,7 +55,7 @@ export default function ChatterBoard({ chatters }: { chatters: ChatterCard[] }) 
       {filteredChatters.length > 0 ? (
         <motion.div
           layout
-          className="grid grid-cols-2 gap-3 md:gap-6 lg:grid-cols-3"
+          className="columns-2 gap-3 md:gap-6 lg:columns-3"
         >
           <AnimatePresence mode="popLayout">
             {filteredChatters.map((chatter) => (
@@ -66,16 +66,17 @@ export default function ChatterBoard({ chatters }: { chatters: ChatterCard[] }) 
                 exit={{ opacity: 0, scale: 0.96 }}
                 transition={{ duration: 0.22 }}
                 key={chatter.route}
+                className="mb-3 break-inside-avoid md:mb-6"
               >
                 <Link
                   href={chatter.route}
-                  className="group relative block aspect-[4/3] overflow-hidden rounded-2xl border border-white/55 bg-slate-800 shadow-md transition-all duration-500 hover:-translate-y-1 hover:border-indigo-300/70 hover:shadow-2xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 motion-reduce:transform-none dark:border-white/10 md:rounded-[2rem]"
+                  className="group relative block overflow-hidden rounded-2xl border border-white/55 bg-slate-800 shadow-md transition-all duration-500 hover:-translate-y-1 hover:border-indigo-300/70 hover:shadow-2xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 motion-reduce:transform-none dark:border-white/10 md:rounded-[2rem]"
                 >
                   <img
                     src={chatter.cover}
                     alt=""
                     loading="lazy"
-                    className="h-full w-full object-cover opacity-90 transition duration-1000 group-hover:scale-105 group-hover:opacity-100 dark:opacity-75"
+                    className="block h-auto w-full opacity-90 transition duration-1000 group-hover:scale-105 group-hover:opacity-100 dark:opacity-80"
                   />
                   <div className="absolute inset-0 bg-gradient-to-t from-slate-950/90 via-slate-950/10 to-transparent" />
                   <h2 className="absolute inset-x-0 bottom-0 line-clamp-2 break-words p-3 text-sm font-black leading-tight text-white drop-shadow-lg transition-colors group-hover:text-indigo-200 sm:p-5 sm:text-lg md:p-6 md:text-xl">
