@@ -12,6 +12,13 @@ const NORMAL_PIXEL_RATIO = 1.25
 const FIELD_BETA = 0.18
 const MODE_INDICES = [2, 3, 5, 7, 11, 13] as const
 const LAMBDAS = MODE_INDICES.map((mode) => FIELD_BETA * Math.pow(mode, 1.5))
+const FIELD_FLOW_SPEED = 0.14
+const FIELD_RADIAL_MIX = 0.22
+const FIELD_EPSILON = 0.05
+const FIELD_WAVE_NUMBER_SCALE = 0.42
+const FIELD_WAVE_DIRECTIONS = [0.18, 1.35, 2.55, 3.58, 4.72, 5.68] as const
+const FIELD_MODE_AMPLITUDES = [0.42, 0.36, 0.3, 0.25, 0.2, 0.16] as const
+const FIELD_MODE_PHASES = [0.31, 2.17, 4.02, 5.41, 1.24, 3.52] as const
 const MAX_TRACERS = 2400
 const MAX_OBSTACLES = 8
 const EFFECT_COUNTS = {
@@ -66,26 +73,152 @@ const FIELD_QUALITY: FieldQuality[] = [
   { foregroundCount: 32, tracerRatio: 0.55, pixelRatio: 1, modeCount: 4, frameMs: 1000 / 30 },
 ]
 
-const VERTEX_SHADER = String.raw`#version 300 es
-precision highp float;
-
-layout(location = 0) in vec4 aCenterScale;
-layout(location = 1) in vec3 aPhaseA;
-layout(location = 2) in vec3 aPhaseB;
-layout(location = 3) in vec3 aAmplitudeA;
-layout(location = 4) in vec3 aAmplitudeB;
-layout(location = 5) in vec4 aMeta;
-
+const SPECTRAL_FIELD_GLSL = String.raw`
 uniform float uTime;
-uniform float uAlpha;
-uniform float uTheme;
 uniform float uModeCount;
-uniform vec2 uResolution;
 uniform vec2 uPointer;
 uniform vec4 uImpulse;
 uniform float uLambda[6];
+
+const float MODE_VALUES[6] = float[6](2.0, 3.0, 5.0, 7.0, 11.0, 13.0);
+const float WAVE_DIRECTIONS[6] = float[6](0.18, 1.35, 2.55, 3.58, 4.72, 5.68);
+const float MODE_AMPLITUDES[6] = float[6](0.42, 0.36, 0.30, 0.25, 0.20, 0.16);
+const float MODE_PHASES[6] = float[6](0.31, 2.17, 4.02, 5.41, 1.24, 3.52);
+
+float hash11(float value) {
+  return fract(sin(value * 127.1) * 43758.5453123);
+}
+
+vec2 spawnPosition(float seed) {
+  float horizontal = hash11(seed * 1.37 + 3.1);
+  float edgeHorizontal =
+    horizontal < 0.5
+      ? 0.5 * pow(horizontal * 2.0, 1.45)
+      : 1.0 - 0.5 * pow((1.0 - horizontal) * 2.0, 1.45);
+  horizontal = mix(horizontal, edgeHorizontal, 0.28);
+  return vec2(
+    mix(-1.04, 1.04, horizontal),
+    mix(-1.04, 1.04, hash11(seed * 2.71 + 7.9))
+  );
+}
+
+vec2 fieldVelocityAt(vec2 position, float time) {
+  vec2 psi = vec2(0.0);
+  vec2 gradientX = vec2(0.0);
+  vec2 gradientY = vec2(0.0);
+
+  float impulseAge = time - uImpulse.z;
+  float impulseBias = 0.0;
+  if (impulseAge >= 0.0 && impulseAge < 2.8) {
+    float distanceSquared = dot(position - uImpulse.xy, position - uImpulse.xy);
+    impulseBias =
+      uImpulse.w *
+      exp(-distanceSquared / 0.16) *
+      exp(-impulseAge * 1.35);
+  }
+  float pointerBias =
+    0.055 *
+    exp(-dot(position - uPointer, position - uPointer) / 0.075);
+
+  for (int index = 0; index < 6; index++) {
+    if (float(index) >= uModeCount) {
+      continue;
+    }
+    float waveNumber = 0.42 * MODE_VALUES[index];
+    vec2 waveVector =
+      waveNumber *
+      vec2(cos(WAVE_DIRECTIONS[index]), sin(WAVE_DIRECTIONS[index]));
+    float alternating = index % 2 == 0 ? 1.0 : -1.0;
+    float theta =
+      dot(waveVector, position) -
+      uLambda[index] * time +
+      MODE_PHASES[index] +
+      impulseBias * (0.35 + float(index) * 0.13) +
+      pointerBias * alternating;
+    vec2 mode = MODE_AMPLITUDES[index] * vec2(cos(theta), sin(theta));
+    vec2 tangent = vec2(-mode.y, mode.x);
+    psi += mode;
+    gradientX += waveVector.x * tangent;
+    gradientY += waveVector.y * tangent;
+  }
+
+  vec2 phaseCurrent = vec2(
+    psi.x * gradientX.y - psi.y * gradientX.x,
+    psi.x * gradientY.y - psi.y * gradientY.x
+  );
+  vec2 amplitudeCurrent = vec2(
+    dot(psi, gradientX),
+    dot(psi, gradientY)
+  );
+  vec2 velocity =
+    0.14 *
+    (phaseCurrent + 0.22 * amplitudeCurrent) /
+    (dot(psi, psi) + 0.05);
+  float speed = length(velocity);
+  if (speed > 0.34) {
+    velocity *= 0.34 / speed;
+  }
+  return velocity;
+}
+`
+
+const UPDATE_VERTEX_SHADER = String.raw`#version 300 es
+precision highp float;
+
+layout(location = 0) in vec4 aState;
+
+uniform float uDeltaTime;
+
+${SPECTRAL_FIELD_GLSL}
+
+out vec4 vState;
+
+void main() {
+  float seed = aState.w;
+  float lifetime = mix(12.0, 28.0, hash11(seed * 3.17));
+  float age = aState.z + uDeltaTime;
+  vec2 position = aState.xy;
+
+  if (age >= lifetime) {
+    seed += 2417.0;
+    age = 0.0;
+    position = spawnPosition(seed);
+  } else if (uDeltaTime > 0.0) {
+    float stepStartedAt = uTime - uDeltaTime;
+    vec2 firstVelocity = fieldVelocityAt(position, stepStartedAt);
+    vec2 midpoint = position + 0.5 * uDeltaTime * firstVelocity;
+    vec2 midpointVelocity = fieldVelocityAt(midpoint, stepStartedAt + 0.5 * uDeltaTime);
+    position += uDeltaTime * midpointVelocity;
+    position = mod(position + 1.08, 2.16) - 1.08;
+  }
+
+  vState = vec4(position, age, seed);
+  gl_Position = vec4(position, 0.0, 1.0);
+  gl_PointSize = 1.0;
+}
+`
+
+const UPDATE_FRAGMENT_SHADER = String.raw`#version 300 es
+precision mediump float;
+out vec4 outColor;
+void main() {
+  outColor = vec4(0.0);
+}
+`
+
+const RENDER_VERTEX_SHADER = String.raw`#version 300 es
+precision highp float;
+
+layout(location = 0) in vec4 aState;
+layout(location = 1) in vec2 aCorner;
+
+uniform float uAlpha;
+uniform float uTheme;
+uniform vec2 uResolution;
 uniform vec4 uObstacles[8];
 uniform int uObstacleCount;
+
+${SPECTRAL_FIELD_GLSL}
 
 out float vAlpha;
 out float vTheme;
@@ -93,61 +226,14 @@ out float vShade;
 out float vAlong;
 out float vAcross;
 
-float hash11(float value) {
-  return fract(sin(value * 127.1) * 43758.5453123);
-}
-
-float readPair(vec3 first, vec3 second, int index) {
-  return index < 3 ? first[index] : second[index - 3];
-}
-
 void main() {
-  float lifetime = mix(8.0, 20.0, hash11(aMeta.x * 3.17));
-  float shiftedTime = uTime + hash11(aMeta.x * 7.31) * lifetime;
-  float cycle = floor(shiftedTime / lifetime);
-  float life = mod(shiftedTime, lifetime) / lifetime;
+  float lifetime = mix(12.0, 28.0, hash11(aState.w * 3.17));
+  float life = aState.z / lifetime;
   float fade = smoothstep(0.0, 0.12, life) * (1.0 - smoothstep(0.82, 1.0, life));
-
-  vec2 generatedCenter = vec2(
-    mix(-0.94, 0.94, hash11(aMeta.x + cycle * 19.7)),
-    mix(-0.88, 0.88, hash11(aMeta.x * 2.31 + cycle * 31.9))
-  );
-  vec2 center = mix(aCenterScale.xy, generatedCenter, step(0.5, cycle));
-
-  float impulseAge = uTime - uImpulse.z;
-  float impulseStrength = 0.0;
-  if (impulseAge >= 0.0 && impulseAge < 2.8) {
-    float distanceToImpulse = distance(center, uImpulse.xy);
-    impulseStrength =
-      uImpulse.w *
-      exp(-(distanceToImpulse * distanceToImpulse) / 0.16) *
-      exp(-impulseAge * 1.35);
-  }
-  float pointerStrength =
-    0.055 * exp(-pow(distance(center, uPointer), 2.0) / 0.075);
-
-  vec2 orbit = vec2(0.0);
-  vec2 velocity = vec2(0.0);
-  for (int index = 0; index < 6; index++) {
-    if (float(index) >= uModeCount) {
-      continue;
-    }
-    float phase = readPair(aPhaseA, aPhaseB, index);
-    float amplitude = readPair(aAmplitudeA, aAmplitudeB, index);
-    float modeWeight = 0.35 + float(index) * 0.13;
-    float theta =
-      uLambda[index] * uTime +
-      phase +
-      impulseStrength * modeWeight +
-      pointerStrength * (index % 2 == 0 ? 1.0 : -1.0);
-    float cosine = cos(theta);
-    float sine = sin(theta);
-    orbit += amplitude * vec2(cosine, sine);
-    velocity += amplitude * uLambda[index] * vec2(-sine, cosine);
-  }
-
-  vec2 position = center + orbit * aCenterScale.zw;
+  vec2 position = aState.xy;
+  vec2 velocity = fieldVelocityAt(position, uTime);
   float obstacleShade = 1.0;
+
   for (int index = 0; index < 8; index++) {
     if (index >= uObstacleCount) {
       break;
@@ -169,30 +255,34 @@ void main() {
     obstacleShade *= inside ? 0.35 : mix(0.72, 1.0, 1.0 - influence);
   }
 
-  vec2 direction = normalize(velocity + vec2(0.0001));
+  vec2 pixelVelocity = velocity * uResolution;
+  float speed = length(pixelVelocity);
+  vec2 direction =
+    speed > 0.0001
+      ? pixelVelocity / speed
+      : vec2(cos(aState.w), sin(aState.w));
   vec2 normal = vec2(-direction.y, direction.x);
-  float speed = length(velocity);
-  float longTracer = step(0.94, hash11(aMeta.x * 9.91));
+  float longTracer = step(0.94, hash11(aState.w * 9.91));
   float lengthPx =
     11.0 +
-    hash11(aMeta.x * 4.19) * 11.0 +
+    hash11(aState.w * 4.19) * 11.0 +
     longTracer * 6.0 +
-    2.0 * speed / (1.0 + speed);
-  float widthPx = 1.4 + hash11(aMeta.x * 8.73);
+    2.0 * speed / (80.0 + speed);
+  float widthPx = 1.4 + hash11(aState.w * 8.73);
   vec2 pixelToClip = vec2(2.0 / uResolution.x, 2.0 / uResolution.y);
   position +=
     (
-      direction * aMeta.y * lengthPx * 0.5 +
-      normal * aMeta.z * widthPx * 0.5
+      direction * aCorner.x * lengthPx * 0.5 +
+      normal * aCorner.y * widthPx * 0.5
     ) *
     pixelToClip;
 
   gl_Position = vec4(position, 0.0, 1.0);
-  vAlpha = mix(0.32, 0.52, hash11(aMeta.x * 6.41)) * fade * uAlpha * obstacleShade;
+  vAlpha = mix(0.32, 0.52, hash11(aState.w * 6.41)) * fade * uAlpha * obstacleShade;
   vTheme = uTheme;
-  vShade = hash11(aMeta.x * 5.73);
-  vAlong = aMeta.y;
-  vAcross = aMeta.z;
+  vShade = hash11(aState.w * 5.73);
+  vAlong = aCorner.x;
+  vAcross = aCorner.y;
 }
 `
 
@@ -216,7 +306,6 @@ void main() {
   outColor = vec4(mix(daylight, night, vTheme), vAlpha * edgeAlpha);
 }
 `
-
 function hash(index: number, seed: number) {
   const value = Math.sin(index * 12.9898 + seed * 78.233) * 43758.5453
   return value - Math.floor(value)
@@ -235,6 +324,77 @@ function smoothstep(value: number) {
   return bounded * bounded * (3 - 2 * bounded)
 }
 
+function sampleFieldVelocity(
+  x: number,
+  y: number,
+  time: number,
+  modeCount: number,
+  pointer: { x: number; y: number },
+  impulse: Impulse | undefined,
+) {
+  let psiReal = 0
+  let psiImaginary = 0
+  let gradientXReal = 0
+  let gradientXImaginary = 0
+  let gradientYReal = 0
+  let gradientYImaginary = 0
+
+  const impulseAge = impulse ? time - impulse.startedAt : 100
+  const impulseDistanceSquared = impulse
+    ? (x - (impulse.x * 2 - 1)) ** 2 + (y - (1 - impulse.y * 2)) ** 2
+    : Infinity
+  const impulseBias =
+    impulse && impulseAge >= 0 && impulseAge < 2.8
+      ? Math.exp(-impulseDistanceSquared / 0.16) * Math.exp(-impulseAge * 1.35)
+      : 0
+  const pointerX = pointer.x * 2 - 1
+  const pointerY = 1 - pointer.y * 2
+  const pointerDistanceSquared = (x - pointerX) ** 2 + (y - pointerY) ** 2
+  const pointerBias = 0.055 * Math.exp(-pointerDistanceSquared / 0.075)
+
+  for (let mode = 0; mode < Math.min(modeCount, MODE_INDICES.length); mode++) {
+    const waveNumber = FIELD_WAVE_NUMBER_SCALE * MODE_INDICES[mode]
+    const waveX = waveNumber * Math.cos(FIELD_WAVE_DIRECTIONS[mode])
+    const waveY = waveNumber * Math.sin(FIELD_WAVE_DIRECTIONS[mode])
+    const theta =
+      waveX * x +
+      waveY * y -
+      LAMBDAS[mode] * time +
+      FIELD_MODE_PHASES[mode] +
+      impulseBias * (0.35 + mode * 0.13) +
+      pointerBias * (mode % 2 === 0 ? 1 : -1)
+    const modeReal = FIELD_MODE_AMPLITUDES[mode] * Math.cos(theta)
+    const modeImaginary = FIELD_MODE_AMPLITUDES[mode] * Math.sin(theta)
+    const tangentReal = -modeImaginary
+    const tangentImaginary = modeReal
+    psiReal += modeReal
+    psiImaginary += modeImaginary
+    gradientXReal += waveX * tangentReal
+    gradientXImaginary += waveX * tangentImaginary
+    gradientYReal += waveY * tangentReal
+    gradientYImaginary += waveY * tangentImaginary
+  }
+
+  const denominator = psiReal * psiReal + psiImaginary * psiImaginary + FIELD_EPSILON
+  let velocityX =
+    (FIELD_FLOW_SPEED *
+      (psiReal * gradientXImaginary -
+        psiImaginary * gradientXReal +
+        FIELD_RADIAL_MIX * (psiReal * gradientXReal + psiImaginary * gradientXImaginary))) /
+    denominator
+  let velocityY =
+    (FIELD_FLOW_SPEED *
+      (psiReal * gradientYImaginary -
+        psiImaginary * gradientYReal +
+        FIELD_RADIAL_MIX * (psiReal * gradientYReal + psiImaginary * gradientYImaginary))) /
+    denominator
+  const speed = Math.hypot(velocityX, velocityY)
+  if (speed > 0.34) {
+    velocityX *= 0.34 / speed
+    velocityY *= 0.34 / speed
+  }
+  return { x: velocityX, y: velocityY }
+}
 function sideWeightedPosition(index: number, seed: number) {
   const position = hash(index, seed)
   const edgePosition =
@@ -329,6 +489,43 @@ function createShader(
   return shader
 }
 
+function createProgram(
+  gl: WebGL2RenderingContext,
+  vertexSource: string,
+  fragmentSource: string,
+  transformVaryings?: string[],
+) {
+  const vertexShader = createShader(gl, gl.VERTEX_SHADER, vertexSource)
+  const fragmentShader = createShader(gl, gl.FRAGMENT_SHADER, fragmentSource)
+  if (!vertexShader || !fragmentShader) {
+    if (vertexShader) gl.deleteShader(vertexShader)
+    if (fragmentShader) gl.deleteShader(fragmentShader)
+    return null
+  }
+
+  const program = gl.createProgram()
+  if (!program) {
+    gl.deleteShader(vertexShader)
+    gl.deleteShader(fragmentShader)
+    return null
+  }
+  gl.attachShader(program, vertexShader)
+  gl.attachShader(program, fragmentShader)
+  if (transformVaryings) {
+    gl.transformFeedbackVaryings(program, transformVaryings, gl.INTERLEAVED_ATTRIBS)
+  }
+  gl.linkProgram(program)
+  gl.deleteShader(vertexShader)
+  gl.deleteShader(fragmentShader)
+
+  if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
+    console.warn("Field program linking failed:", gl.getProgramInfoLog(program))
+    gl.deleteProgram(program)
+    return null
+  }
+  return program
+}
+
 function createFieldRenderer(canvas: HTMLCanvasElement) {
   const gl = canvas.getContext("webgl2", {
     alpha: true,
@@ -339,123 +536,128 @@ function createFieldRenderer(canvas: HTMLCanvasElement) {
   })
   if (!gl) return null
 
-  const vertexShader = createShader(gl, gl.VERTEX_SHADER, VERTEX_SHADER)
-  const fragmentShader = createShader(gl, gl.FRAGMENT_SHADER, FRAGMENT_SHADER)
-  if (!vertexShader || !fragmentShader) return null
-
-  const program = gl.createProgram()
-  if (!program) return null
-  gl.attachShader(program, vertexShader)
-  gl.attachShader(program, fragmentShader)
-  gl.linkProgram(program)
-  gl.deleteShader(vertexShader)
-  gl.deleteShader(fragmentShader)
-
-  if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
-    console.warn("Field program linking failed:", gl.getProgramInfoLog(program))
-    gl.deleteProgram(program)
+  const updateProgram = createProgram(gl, UPDATE_VERTEX_SHADER, UPDATE_FRAGMENT_SHADER, ["vState"])
+  const renderProgram = createProgram(gl, RENDER_VERTEX_SHADER, FRAGMENT_SHADER)
+  if (!updateProgram || !renderProgram) {
+    if (updateProgram) gl.deleteProgram(updateProgram)
+    if (renderProgram) gl.deleteProgram(renderProgram)
     return null
   }
 
-  const floatsPerVertex = 20
-  const verticesPerTracer = 6
-  const vertices = new Float32Array(MAX_TRACERS * verticesPerTracer * floatsPerVertex)
-  const quadCorners = [
-    [-1, -1],
-    [1, -1],
-    [1, 1],
-    [-1, -1],
-    [1, 1],
-    [-1, 1],
-  ] as const
-  let cursor = 0
-
+  const initialStates = new Float32Array(MAX_TRACERS * 4)
   for (let tracer = 0; tracer < MAX_TRACERS; tracer++) {
-    const centerX = sideWeightedPosition(tracer, 31) * 1.88 - 0.94
-    const centerY = hash(tracer, 32) * 1.76 - 0.88
-    const scaleX = 0.035 + hash(tracer, 33) * 0.11
-    const scaleY = scaleX * (0.62 + hash(tracer, 34) * 0.48)
-    const rawAmplitudes = MODE_INDICES.map(
-      (_, mode) => Math.pow(mode + 1.5, -1.4) * (0.75 + hash(tracer * 17 + mode, 35) * 0.5),
+    const seed = tracer + 1
+    const lifetime = 12 + hash(seed, 37) * 16
+    initialStates.set(
+      [
+        sideWeightedPosition(tracer, 31) * 2.08 - 1.04,
+        hash(tracer, 32) * 2.08 - 1.04,
+        hash(tracer, 33) * lifetime,
+        seed,
+      ],
+      tracer * 4,
     )
-    const amplitudeSum = rawAmplitudes.reduce((sum, amplitude) => sum + amplitude, 0)
-    const amplitudes = rawAmplitudes.map((amplitude) => amplitude / amplitudeSum)
-    const phases = MODE_INDICES.map((_, mode) => hash(tracer * 29 + mode, 36) * TAU)
+  }
 
-    for (const [along, across] of quadCorners) {
-      vertices.set(
-        [
-          centerX,
-          centerY,
-          scaleX,
-          scaleY,
-          phases[0],
-          phases[1],
-          phases[2],
-          phases[3],
-          phases[4],
-          phases[5],
-          amplitudes[0],
-          amplitudes[1],
-          amplitudes[2],
-          amplitudes[3],
-          amplitudes[4],
-          amplitudes[5],
-          tracer + 1,
-          along,
-          across,
-          0,
-        ],
-        cursor,
-      )
-      cursor += floatsPerVertex
+  const stateBufferA = gl.createBuffer()
+  const stateBufferB = gl.createBuffer()
+  const quadBuffer = gl.createBuffer()
+  if (!stateBufferA || !stateBufferB || !quadBuffer) {
+    if (stateBufferA) gl.deleteBuffer(stateBufferA)
+    if (stateBufferB) gl.deleteBuffer(stateBufferB)
+    if (quadBuffer) gl.deleteBuffer(quadBuffer)
+    gl.deleteProgram(updateProgram)
+    gl.deleteProgram(renderProgram)
+    return null
+  }
+  const stateBuffers = [stateBufferA, stateBufferB]
+  for (const buffer of stateBuffers) {
+    gl.bindBuffer(gl.ARRAY_BUFFER, buffer)
+    gl.bufferData(gl.ARRAY_BUFFER, initialStates, gl.DYNAMIC_COPY)
+  }
+
+  gl.bindBuffer(gl.ARRAY_BUFFER, quadBuffer)
+  gl.bufferData(
+    gl.ARRAY_BUFFER,
+    new Float32Array([-1, -1, 1, -1, 1, 1, -1, -1, 1, 1, -1, 1]),
+    gl.STATIC_DRAW,
+  )
+
+  const createUpdateVertexArray = (stateBuffer: WebGLBuffer) => {
+    const vertexArray = gl.createVertexArray()
+    if (!vertexArray) return null
+    gl.bindVertexArray(vertexArray)
+    gl.bindBuffer(gl.ARRAY_BUFFER, stateBuffer)
+    gl.enableVertexAttribArray(0)
+    gl.vertexAttribPointer(0, 4, gl.FLOAT, false, 4 * Float32Array.BYTES_PER_ELEMENT, 0)
+    return vertexArray
+  }
+
+  const createRenderVertexArray = (stateBuffer: WebGLBuffer) => {
+    const vertexArray = gl.createVertexArray()
+    if (!vertexArray) return null
+    gl.bindVertexArray(vertexArray)
+    gl.bindBuffer(gl.ARRAY_BUFFER, stateBuffer)
+    gl.enableVertexAttribArray(0)
+    gl.vertexAttribPointer(0, 4, gl.FLOAT, false, 4 * Float32Array.BYTES_PER_ELEMENT, 0)
+    gl.vertexAttribDivisor(0, 1)
+    gl.bindBuffer(gl.ARRAY_BUFFER, quadBuffer)
+    gl.enableVertexAttribArray(1)
+    gl.vertexAttribPointer(1, 2, gl.FLOAT, false, 2 * Float32Array.BYTES_PER_ELEMENT, 0)
+    gl.vertexAttribDivisor(1, 0)
+    return vertexArray
+  }
+
+  const updateVertexArrayA = createUpdateVertexArray(stateBufferA)
+  const updateVertexArrayB = createUpdateVertexArray(stateBufferB)
+  const renderVertexArrayA = createRenderVertexArray(stateBufferA)
+  const renderVertexArrayB = createRenderVertexArray(stateBufferB)
+  if (!updateVertexArrayA || !updateVertexArrayB || !renderVertexArrayA || !renderVertexArrayB) {
+    for (const vertexArray of [
+      updateVertexArrayA,
+      updateVertexArrayB,
+      renderVertexArrayA,
+      renderVertexArrayB,
+    ]) {
+      if (vertexArray) gl.deleteVertexArray(vertexArray)
     }
+    for (const buffer of stateBuffers) gl.deleteBuffer(buffer)
+    gl.deleteBuffer(quadBuffer)
+    gl.deleteProgram(updateProgram)
+    gl.deleteProgram(renderProgram)
+    return null
   }
-
-  const vertexArray = gl.createVertexArray()
-  const buffer = gl.createBuffer()
-  if (!vertexArray || !buffer) return null
-  gl.bindVertexArray(vertexArray)
-  gl.bindBuffer(gl.ARRAY_BUFFER, buffer)
-  gl.bufferData(gl.ARRAY_BUFFER, vertices, gl.STATIC_DRAW)
-
-  const stride = floatsPerVertex * Float32Array.BYTES_PER_ELEMENT
-  const attributes = [
-    { location: 0, size: 4, offset: 0 },
-    { location: 1, size: 3, offset: 4 },
-    { location: 2, size: 3, offset: 7 },
-    { location: 3, size: 3, offset: 10 },
-    { location: 4, size: 3, offset: 13 },
-    { location: 5, size: 4, offset: 16 },
-  ]
-  for (const attribute of attributes) {
-    gl.enableVertexAttribArray(attribute.location)
-    gl.vertexAttribPointer(
-      attribute.location,
-      attribute.size,
-      gl.FLOAT,
-      false,
-      stride,
-      attribute.offset * Float32Array.BYTES_PER_ELEMENT,
-    )
-  }
+  const updateVertexArrays = [updateVertexArrayA, updateVertexArrayB]
+  const renderVertexArrays = [renderVertexArrayA, renderVertexArrayB]
   gl.bindVertexArray(null)
+  gl.bindBuffer(gl.ARRAY_BUFFER, null)
 
-  const uniforms = {
-    time: gl.getUniformLocation(program, "uTime"),
-    alpha: gl.getUniformLocation(program, "uAlpha"),
-    theme: gl.getUniformLocation(program, "uTheme"),
-    modeCount: gl.getUniformLocation(program, "uModeCount"),
-    resolution: gl.getUniformLocation(program, "uResolution"),
-    pointer: gl.getUniformLocation(program, "uPointer"),
-    impulse: gl.getUniformLocation(program, "uImpulse"),
-    lambda: gl.getUniformLocation(program, "uLambda[0]"),
-    obstacles: gl.getUniformLocation(program, "uObstacles[0]"),
-    obstacleCount: gl.getUniformLocation(program, "uObstacleCount"),
+  const updateUniforms = {
+    time: gl.getUniformLocation(updateProgram, "uTime"),
+    deltaTime: gl.getUniformLocation(updateProgram, "uDeltaTime"),
+    modeCount: gl.getUniformLocation(updateProgram, "uModeCount"),
+    pointer: gl.getUniformLocation(updateProgram, "uPointer"),
+    impulse: gl.getUniformLocation(updateProgram, "uImpulse"),
+    lambda: gl.getUniformLocation(updateProgram, "uLambda[0]"),
+  }
+  const renderUniforms = {
+    time: gl.getUniformLocation(renderProgram, "uTime"),
+    alpha: gl.getUniformLocation(renderProgram, "uAlpha"),
+    theme: gl.getUniformLocation(renderProgram, "uTheme"),
+    modeCount: gl.getUniformLocation(renderProgram, "uModeCount"),
+    resolution: gl.getUniformLocation(renderProgram, "uResolution"),
+    pointer: gl.getUniformLocation(renderProgram, "uPointer"),
+    impulse: gl.getUniformLocation(renderProgram, "uImpulse"),
+    lambda: gl.getUniformLocation(renderProgram, "uLambda[0]"),
+    obstacles: gl.getUniformLocation(renderProgram, "uObstacles[0]"),
+    obstacleCount: gl.getUniformLocation(renderProgram, "uObstacleCount"),
   }
 
   gl.enable(gl.BLEND)
   gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA)
+
+  let stateIndex = 0
+  let lastTime: number | null = null
 
   const resize = (width: number, height: number, pixelRatio: number) => {
     canvas.width = Math.max(1, Math.floor(width * pixelRatio))
@@ -463,6 +665,32 @@ function createFieldRenderer(canvas: HTMLCanvasElement) {
     canvas.style.width = width + "px"
     canvas.style.height = height + "px"
     gl.viewport(0, 0, canvas.width, canvas.height)
+  }
+
+  const setFlowUniforms = (
+    programUniforms: {
+      time: WebGLUniformLocation | null
+      modeCount: WebGLUniformLocation | null
+      pointer: WebGLUniformLocation | null
+      impulse: WebGLUniformLocation | null
+      lambda: WebGLUniformLocation | null
+    },
+    time: number,
+    modeCount: number,
+    pointer: { x: number; y: number },
+    impulse: Impulse | undefined,
+  ) => {
+    gl.uniform1f(programUniforms.time, time)
+    gl.uniform1f(programUniforms.modeCount, modeCount)
+    gl.uniform2f(programUniforms.pointer, pointer.x * 2 - 1, 1 - pointer.y * 2)
+    gl.uniform4f(
+      programUniforms.impulse,
+      impulse ? impulse.x * 2 - 1 : -4,
+      impulse ? 1 - impulse.y * 2 : -4,
+      impulse?.startedAt ?? -100,
+      impulse ? 1 : 0,
+    )
+    gl.uniform1fv(programUniforms.lambda, LAMBDAS)
   }
 
   const render = ({
@@ -490,7 +718,26 @@ function createFieldRenderer(canvas: HTMLCanvasElement) {
   }) => {
     gl.clearColor(0, 0, 0, 0)
     gl.clear(gl.COLOR_BUFFER_BIT)
-    if (alpha <= 0.001) return
+
+    const deltaTime = lastTime === null ? 0 : clamp(time - lastTime, 0, 0.05)
+    lastTime = time
+    const activeCount = Math.min(tracerCount, MAX_TRACERS)
+    if (alpha <= 0.001 || activeCount <= 0) return
+
+    const writeIndex = 1 - stateIndex
+    gl.useProgram(updateProgram)
+    setFlowUniforms(updateUniforms, time, modeCount, pointer, impulse)
+    gl.uniform1f(updateUniforms.deltaTime, deltaTime)
+    gl.bindVertexArray(updateVertexArrays[stateIndex])
+    gl.bindBufferBase(gl.TRANSFORM_FEEDBACK_BUFFER, 0, stateBuffers[writeIndex])
+    gl.enable(gl.RASTERIZER_DISCARD)
+    gl.beginTransformFeedback(gl.POINTS)
+    gl.drawArrays(gl.POINTS, 0, activeCount)
+    gl.endTransformFeedback()
+    gl.disable(gl.RASTERIZER_DISCARD)
+    gl.bindBufferBase(gl.TRANSFORM_FEEDBACK_BUFFER, 0, null)
+    gl.bindVertexArray(null)
+    stateIndex = writeIndex
 
     const obstacleData = new Float32Array(MAX_OBSTACLES * 4)
     obstacles.slice(0, MAX_OBSTACLES).forEach((obstacle, index) => {
@@ -505,38 +752,31 @@ function createFieldRenderer(canvas: HTMLCanvasElement) {
       )
     })
 
-    gl.useProgram(program)
-    gl.bindVertexArray(vertexArray)
-    gl.uniform1f(uniforms.time, time)
-    gl.uniform1f(uniforms.alpha, alpha)
-    gl.uniform1f(uniforms.theme, theme)
-    gl.uniform1f(uniforms.modeCount, modeCount)
-    gl.uniform2f(uniforms.resolution, width, height)
-    gl.uniform2f(uniforms.pointer, pointer.x * 2 - 1, 1 - pointer.y * 2)
-    gl.uniform4f(
-      uniforms.impulse,
-      impulse ? impulse.x * 2 - 1 : -4,
-      impulse ? 1 - impulse.y * 2 : -4,
-      impulse?.startedAt ?? -100,
-      impulse ? 1 : 0,
-    )
-    gl.uniform1fv(uniforms.lambda, LAMBDAS)
-    gl.uniform4fv(uniforms.obstacles, obstacleData)
-    gl.uniform1i(uniforms.obstacleCount, Math.min(obstacles.length, MAX_OBSTACLES))
-    gl.drawArrays(gl.TRIANGLES, 0, Math.min(tracerCount, MAX_TRACERS) * verticesPerTracer)
+    gl.useProgram(renderProgram)
+    setFlowUniforms(renderUniforms, time, modeCount, pointer, impulse)
+    gl.uniform1f(renderUniforms.alpha, alpha)
+    gl.uniform1f(renderUniforms.theme, theme)
+    gl.uniform2f(renderUniforms.resolution, width, height)
+    gl.uniform4fv(renderUniforms.obstacles, obstacleData)
+    gl.uniform1i(renderUniforms.obstacleCount, Math.min(obstacles.length, MAX_OBSTACLES))
+    gl.bindVertexArray(renderVertexArrays[stateIndex])
+    gl.drawArraysInstanced(gl.TRIANGLES, 0, 6, activeCount)
     gl.bindVertexArray(null)
   }
 
   const destroy = () => {
-    gl.deleteBuffer(buffer)
-    gl.deleteVertexArray(vertexArray)
-    gl.deleteProgram(program)
+    for (const vertexArray of [...updateVertexArrays, ...renderVertexArrays]) {
+      gl.deleteVertexArray(vertexArray)
+    }
+    for (const buffer of stateBuffers) gl.deleteBuffer(buffer)
+    gl.deleteBuffer(quadBuffer)
+    gl.deleteProgram(updateProgram)
+    gl.deleteProgram(renderProgram)
     gl.getExtension("WEBGL_lose_context")?.loseContext()
   }
 
   return { resize, render, destroy }
 }
-
 function pointShade(x: number, y: number, obstacles: Obstacle[]) {
   for (const obstacle of obstacles) {
     if (x >= obstacle.left && x <= obstacle.right && y >= obstacle.top && y <= obstacle.bottom) {
@@ -627,19 +867,16 @@ export default function FieldScene() {
         spectrum: createSpectrum(index, 303, 3, x * TAU * 2.2),
       }
     })
-    const foregroundTracers = Array.from(
-      { length: EFFECT_COUNTS.foregroundTracer },
-      (_, index) => ({
-        centerX: sideWeightedPosition(index, 401),
-        centerY: 0.06 + hash(index, 402) * 0.88,
-        scale: 28 + hash(index, 403) * 96,
-        length: 11 + hash(index, 404) * 13,
-        opacity: 0.14 + hash(index, 405) * 0.1,
-        lifetime: 8 + hash(index, 406) * 12,
-        offset: hash(index, 407) * 20,
-        spectrum: createSpectrum(index, 408, 6),
-      }),
-    )
+    const foregroundTracers = Array.from({ length: EFFECT_COUNTS.foregroundTracer }, (_, index) => {
+      const seed = index + 10001
+      const lifetime = 12 + hash(seed, 406) * 16
+      return {
+        x: sideWeightedPosition(index, 401) * 2.08 - 1.04,
+        y: hash(index, 402) * 2.08 - 1.04,
+        age: hash(index, 407) * lifetime,
+        seed,
+      }
+    })
     const danmaku = siteConfig.danmakuList.length
       ? Array.from({ length: EFFECT_COUNTS.danmaku }, (_, index) => ({
           text: siteConfig.danmakuList[Math.floor(hash(index, 1) * siteConfig.danmakuList.length)],
@@ -858,58 +1095,78 @@ export default function FieldScene() {
       speciesContext.globalAlpha = 1
     }
 
-    const drawFront = (time: number, cosines: number[], sines: number[], quality: FieldQuality) => {
+    const drawFront = (time: number, deltaTime: number, quality: FieldQuality) => {
       frontContext.clearRect(0, 0, width, height)
 
       const frontAlpha = smoothstep((fieldBlend - 0.58) / 0.42)
       if (frontAlpha > 0.001) {
         frontContext.lineCap = "round"
         frontContext.strokeStyle = themeBlend > 0.5 ? "rgb(218, 232, 255)" : "rgb(48, 63, 112)"
+        const latestImpulse = impulses[impulses.length - 1]
+        const step = Math.min(deltaTime, 0.05)
 
         for (let index = 0; index < quality.foregroundCount; index++) {
           const tracer = foregroundTracers[index]
-          const shiftedTime = time + tracer.offset
-          const cycle = Math.floor(shiftedTime / tracer.lifetime)
-          const life = (shiftedTime % tracer.lifetime) / tracer.lifetime
+          const lifetime = 12 + hash(tracer.seed, 406) * 16
+          tracer.age += step
+
+          if (tracer.age >= lifetime) {
+            tracer.seed += 7919
+            tracer.age = 0
+            tracer.x = sideWeightedPosition(tracer.seed, 409) * 2.08 - 1.04
+            tracer.y = hash(tracer.seed, 410) * 2.08 - 1.04
+          } else if (step > 0) {
+            const firstVelocity = sampleFieldVelocity(
+              tracer.x,
+              tracer.y,
+              time - step,
+              quality.modeCount,
+              pointer,
+              latestImpulse,
+            )
+            const midpointX = tracer.x + firstVelocity.x * step * 0.5
+            const midpointY = tracer.y + firstVelocity.y * step * 0.5
+            const midpointVelocity = sampleFieldVelocity(
+              midpointX,
+              midpointY,
+              time - step * 0.5,
+              quality.modeCount,
+              pointer,
+              latestImpulse,
+            )
+            tracer.x = wrap(tracer.x + midpointVelocity.x * step + 1.08, 2.16) - 1.08
+            tracer.y = wrap(tracer.y + midpointVelocity.y * step + 1.08, 2.16) - 1.08
+          }
+
+          const life = tracer.age / lifetime
           const fade = smoothstep(life / 0.12) * (1 - smoothstep((life - 0.82) / 0.18))
-          const centerX =
-            (cycle > 0 ? sideWeightedPosition(index + cycle * 97, 409) : tracer.centerX) * width
-          const centerY =
-            (cycle > 0 ? 0.06 + hash(index + cycle * 131, 410) * 0.88 : tracer.centerY) * height
-          const latestImpulse = impulses[impulses.length - 1]
-          const impulseAge = latestImpulse ? time - latestImpulse.startedAt : 100
-          const impulseDistance = latestImpulse
-            ? Math.hypot(centerX - latestImpulse.x * width, centerY - latestImpulse.y * height)
-            : Infinity
-          const phaseBias =
-            impulseAge >= 0 && impulseAge < 2.8
-              ? Math.exp(-(impulseDistance * impulseDistance) / (2 * 190 * 190)) *
-                Math.exp(-impulseAge * 1.35)
-              : 0
-          const spectral = sampleSpectrum(
-            tracer.spectrum,
-            cosines,
-            sines,
+          const velocity = sampleFieldVelocity(
+            tracer.x,
+            tracer.y,
+            time,
             quality.modeCount,
-            phaseBias,
+            pointer,
+            latestImpulse,
           )
-          const x = centerX + spectral.x * tracer.scale
-          const y = centerY + spectral.y * tracer.scale
-          const speed = Math.hypot(spectral.velocityX, spectral.velocityY)
-          const directionX = spectral.velocityX / Math.max(speed, 0.0001)
-          const directionY = spectral.velocityY / Math.max(speed, 0.0001)
-          const length = tracer.length + (2.5 * speed) / (1 + speed)
+          const pixelVelocityX = velocity.x * width
+          const pixelVelocityY = -velocity.y * height
+          const speed = Math.hypot(pixelVelocityX, pixelVelocityY)
+          const directionX = speed > 0.0001 ? pixelVelocityX / speed : Math.cos(tracer.seed)
+          const directionY = speed > 0.0001 ? pixelVelocityY / speed : Math.sin(tracer.seed)
+          const x = ((tracer.x + 1) * width) / 2
+          const y = ((1 - tracer.y) * height) / 2
+          const length = 11 + hash(tracer.seed, 404) * 13 + (2.5 * speed) / (80 + speed)
           const shade = pointShade(x, y, obstacles)
 
-          frontContext.globalAlpha = tracer.opacity * fade * frontAlpha * shade
-          frontContext.lineWidth = 1 + hash(index, 411) * 0.7
+          frontContext.globalAlpha =
+            (0.14 + hash(tracer.seed, 405) * 0.1) * fade * frontAlpha * shade
+          frontContext.lineWidth = 1 + hash(tracer.seed, 411) * 0.7
           frontContext.beginPath()
           frontContext.moveTo(x - directionX * length * 0.5, y - directionY * length * 0.5)
           frontContext.lineTo(x + directionX * length * 0.5, y + directionY * length * 0.5)
           frontContext.stroke()
         }
       }
-
       for (let index = ripples.length - 1; index >= 0; index--) {
         const ripple = ripples[index]
         ripple.radius += ripple.velocity
@@ -941,11 +1198,12 @@ export default function FieldScene() {
       if (!force && elapsedSinceLastFrame < targetFrameMs) return
       lastFrame = now - (elapsedSinceLastFrame % targetFrameMs)
 
+      const deltaSeconds = clamp(elapsedSinceLastFrame / 1000, 0, 0.1)
+
       if (reducedMotionQuery.matches) {
         fieldBlend = modeRef.current === "field" ? 1 : 0
         themeBlend = darkRef.current ? 1 : 0
       } else {
-        const deltaSeconds = clamp(elapsedSinceLastFrame / 1000, 0, 0.1)
         const fieldTarget = modeRef.current === "field" ? 1 : 0
         const themeTarget = darkRef.current ? 1 : 0
         fieldBlend += clamp(fieldTarget - fieldBlend, -deltaSeconds / 0.9, deltaSeconds / 0.9)
@@ -996,7 +1254,7 @@ export default function FieldScene() {
         })
       }
 
-      drawFront(time, cosines, sines, quality)
+      drawFront(time, fieldBlend > 0.001 ? deltaSeconds : 0, quality)
       while (impulses.length && time - impulses[0].startedAt > 3) impulses.shift()
 
       if (modeRef.current === "field" && !reducedMotionQuery.matches) {

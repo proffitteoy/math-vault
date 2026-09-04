@@ -102,18 +102,18 @@ Field  + Dark
 
 ### 4.2 各组件状态
 
-| 组件 | Light | Dark | Normal Mode 行为 |
-|---|---|---|---|
-| BackgroundSlider | 保留 | 保留 | 不变 |
-| Gradient / tint | 保留 | 保留 | 不变 |
-| Sakura | 开 | 关 | 保留当前下降 + quasi-periodic 横摆 |
-| Fireflies | 关 | 开 | 保留当前 quasi-periodic 运动 + breathe |
-| Grass | 开 | 开 | 保留当前 travelling-wave 摆动 |
-| Danmaku | 开 | 开 | 保留当前低透明度横向移动 |
-| Tracer | 关 | 关 | 不显示 |
-| FieldFront | 关 | 关 | 不创建 |
-| ClickEffect | 开 | 开 | 保留当前 ripple |
-| DOM obstacle interaction | 关 | 关 | 不启用 |
+| 组件                     | Light | Dark | Normal Mode 行为                       |
+| ------------------------ | ----- | ---- | -------------------------------------- |
+| BackgroundSlider         | 保留  | 保留 | 不变                                   |
+| Gradient / tint          | 保留  | 保留 | 不变                                   |
+| Sakura                   | 开    | 关   | 保留当前下降 + quasi-periodic 横摆     |
+| Fireflies                | 关    | 开   | 保留当前 quasi-periodic 运动 + breathe |
+| Grass                    | 开    | 开   | 保留当前 travelling-wave 摆动          |
+| Danmaku                  | 开    | 开   | 保留当前低透明度横向移动               |
+| Tracer                   | 关    | 关   | 不显示                                 |
+| FieldFront               | 关    | 关   | 不创建                                 |
+| ClickEffect              | 开    | 开   | 保留当前 ripple                        |
+| DOM obstacle interaction | 关    | 关   | 不启用                                 |
 
 Normal Mode 的原则是：**稳定、廉价、不改变现有视觉语言。**
 
@@ -133,18 +133,18 @@ Normal Mode 的原则是：**稳定、廉价、不改变现有视觉语言。**
 
 ### 5.2 高性能档组件状态
 
-| 组件 | Light | Dark | Field Mode 行为 |
-|---|---|---|---|
-| BackgroundSlider | 保留 | 保留 | 只作为静态/缓慢背景 |
-| Gradient / tint | 保留 | 保留 | 降低高频视觉对比 |
-| Sakura | 开 | 关 | 改为 spectral forcing + downward drift |
-| Fireflies | 关 | 开 | 改为 weakly-coupled spectral orbit |
-| Grass | 开 | 开 | 由共享 spectrum 的局部相位驱动 |
-| Danmaku | 弱化 | 弱化 | opacity 降低 30%–50%，避免与 tracer 竞争 |
-| Tracer | 开 | 开 | Field Mode 主体 |
-| FieldFront | 开 | 开 | 只画 5%–10% tracer |
-| ClickEffect | 替换 | 替换 | 改为 spectral phase impulse |
-| DOM obstacle interaction | 开 | 开 | 使用 soft warp，不做硬碰撞 |
+| 组件                     | Light | Dark | Field Mode 行为                          |
+| ------------------------ | ----- | ---- | ---------------------------------------- |
+| BackgroundSlider         | 保留  | 保留 | 只作为静态/缓慢背景                      |
+| Gradient / tint          | 保留  | 保留 | 降低高频视觉对比                         |
+| Sakura                   | 开    | 关   | 改为 spectral forcing + downward drift   |
+| Fireflies                | 关    | 开   | 改为 weakly-coupled spectral orbit       |
+| Grass                    | 开    | 开   | 由共享 spectrum 的局部相位驱动           |
+| Danmaku                  | 弱化  | 弱化 | opacity 降低 30%–50%，避免与 tracer 竞争 |
+| Tracer                   | 开    | 开   | Field Mode 主体                          |
+| FieldFront               | 开    | 开   | 只画 5%–10% tracer                       |
+| ClickEffect              | 替换  | 替换 | 改为 spectral phase impulse              |
+| DOM obstacle interaction | 开    | 开   | 使用 soft warp，不做硬碰撞               |
 
 ---
 
@@ -258,29 +258,18 @@ Math.random()
 \lambda_m = \beta m^{3/2}.
 ```
 
-所有对象共享这些频率，但使用不同：
+Tracer 不再为每个粒子生成独立系数、相位和局部轨道。应先由全局共享的 `c_m`、`k_m`、`φ_m` 构造谱场 `ψ(x,t)`，再由同一个速度场 `v_ψ(x,t)` 输运所有 tracer。seed 只用于初始化位置、寿命、重生位置和视觉尺寸。
 
-- 系数；
-- 相位；
-- mode 子集；
-- 局部尺度。
-
-因此：
+花瓣、萤火虫与草可按各自惯性和物种运动逐步耦合这个场；它们不能反过来让 tracer 退化为独立的 Fourier orbit。
 
 ```text
-same spectrum
+fractional spectrum
     ↓
-different coefficients
+global ψ(x,t)
     ↓
-different species
-```
-
-而不是：
-
-```text
-same trajectory
+shared vψ(x,t)
     ↓
-different sprite
+persistent tracer states
 ```
 
 ---
@@ -288,6 +277,58 @@ different sprite
 ## 9. Tracer 设计
 
 Tracer 是 Field Mode 的主视觉，不是“粒子点”。
+
+### 9.0 全局谱场输运
+
+定义整个平面共享的复值谱场：
+
+```math
+\psi(x,t)
+=
+\sum_{m=1}^{M}
+c_m e^{i(k_m\cdot x-\lambda_m t+\phi_m)}.
+```
+
+由它生成速度场：
+
+```math
+v_\psi(x,t)
+=
+\frac{
+\operatorname{Im}(\bar\psi\nabla\psi)
++
+\mu\operatorname{Re}(\bar\psi\nabla\psi)
+}{
+|\psi|^2+\varepsilon
+}.
+```
+
+每个 tracer 只保存持久状态 (x, y, age, seed)，并满足同一个常微分方程：
+
+```math
+\dot X_i(t)=v_\psi(X_i(t),t).
+```
+
+使用 midpoint / RK2 推进：
+
+```math
+K_1=v_\psi(X_i^n,t_n),
+```
+
+```math
+X_i^{n+1}
+=
+X_i^n
++
+\Delta t\,
+v_\psi
+\left(
+X_i^n+\frac{\Delta t}{2}K_1,
+t_n+\frac{\Delta t}{2}
+\right).
+```
+
+WebGL2 后景 tracer 使用 transform feedback 在两组状态 buffer 间交换。前景 tracer 使用同一公式的 Canvas2D 状态推进。禁止重新引入每粒子独立 phase、amplitude、center + orbit。
 
 ### 9.1 形态
 
@@ -372,7 +413,7 @@ FieldFront = 5%–10%
 重生规则：
 
 1. alpha 先衰减。
-2. 在另一区域重新采样 orbit center。
+2. 在另一区域重置持久位置状态。
 3. 新 tracer 从 alpha 0 淡入。
 4. 不改变 global spectral phases。
 
@@ -592,7 +633,7 @@ Pointer move 只允许弱影响：
 正确方式是分两层：
 
 ```text
-canonical spectral orbit
+canonical particle advection
     ↓
 screen embedding
     ↓
@@ -603,7 +644,7 @@ render
 
 因此：
 
-- 数学轨迹仍然由 fractional spectral flow 生成；
+- 数学速度场仍然由 fractional spectral flow 生成，粒子轨迹是该场的积分曲线；
 - 卡片、播放器、Navbar 只改变屏幕映射。
 
 ### 15.1 DOM 几何采样

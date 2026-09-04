@@ -385,92 +385,111 @@ s
 
 ---
 
-## 10. Tracer 的标准轨迹
+## 10. Tracer 的全局谱场
 
-第 q 个 tracer：
+网站 tracer 不直接把二维线性观测 z(t) 当作每个粒子的坐标。它退后一层，成为全局复值谱场的时间结构：
 
 ```math
-z_q(t)
+\boxed{
+\psi(x,t)
 =
-\sum_{j=1}^{N}
-r_{q,j}
-e^{i(\lambda_jt+\phi_{q,j})}.
+\sum_{m=1}^{M}
+c_m e^{i(k_m\cdot x-\lambda_m t+\phi_m)}
+}
 ```
 
-推荐：
+其中：
 
-```text
-N = 6–8
+```math
+\lambda_m=\beta |m|^{3/2}.
 ```
 
-每个 tracer：
+c_m、k_m、φ_m 对所有 tracer 共享，不允许出现带粒子下标的 φ_im 或 c_im。这样 Hilbert 空间中的 fractional unitary evolution 先生成 ψ，再由 ψ 生成屏幕上的流。
 
-- 共享同一个 `λ_j`；
-- 使用不同 `r_{q,j}`；
-- 使用不同 `φ_{q,j}`；
-- 有自己的 `center_q`；
-- 有自己的 `scale_q`。
+定义：
 
-因此：
-
-```text
-shared spectrum
-+ different observables
-= coherent but non-identical trajectories
+```math
+\operatorname{ReCurrent}
+=
+\operatorname{Re}(\bar\psi\nabla\psi),
 ```
 
-这就是 Field Mode 的统一感来源。
+```math
+\operatorname{PhaseCurrent}
+=
+\operatorname{Im}(\bar\psi\nabla\psi).
+```
+
+选用共同速度场：
+
+```math
+\boxed{
+v_\psi(x,t)
+=
+\frac{
+\operatorname{PhaseCurrent}
++
+\mu\operatorname{ReCurrent}
+}{
+|\psi|^2+\varepsilon
+}
+}
+```
+
+其中 ε 防止谱零点附近速度数值爆炸，μ 提供径向分量。
+
+在 ψ 的简单零点附近，旋转分量近似 r^{-1}e_θ，径向分量近似 μr^{-1}e_r。二者结合产生一边旋转、一边径向迁移的局部螺旋，而不是固定中心附近的自转。
 
 ---
 
-## 11. Tracer 速度
+## 11. Tracer 状态与 RK2
 
-轨迹导数：
+第 i 个 tracer 只保存：
 
-```math
-\dot z_q(t)
-=
-i
-\sum_{j=1}^{N}
-\lambda_j r_{q,j}
-e^{i(\lambda_jt+\phi_{q,j})}.
+```text
+X_i = (x_i, y_i)
+age_i
+seed_i
 ```
 
-因此瞬时速度可以直接得到，不需要有限差分。
-
-屏幕速度：
+seed 只用于初始位置、寿命、重生位置与视觉尺寸。所有 tracer 满足同一个方程：
 
 ```math
-V_q(t)
-=
-s_q
-\begin{pmatrix}
-\Re\dot z_q(t)\\
-\Im\dot z_q(t)
-\end{pmatrix}.
+\dot X_i(t)=v_\psi(X_i(t),t).
 ```
 
-Tracer 朝向取：
+离散推进使用 midpoint / RK2：
 
 ```math
-\vartheta_q(t)
-=
-\operatorname{atan2}(V_{q,y},V_{q,x}).
+K_1=v_\psi(X_i^n,t_n),
 ```
 
-线段长度可取：
-
 ```math
-L_q(t)
+X_i^{n+1}
 =
-L_0
+X_i^n
 +
-\kappa
-\frac{\lVert V_q(t)\rVert}
-{1+\lVert V_q(t)\rVert}.
+\Delta t\,
+v_\psi
+\left(
+X_i^n+\frac{\Delta t}{2}K_1,
+t_n+\frac{\Delta t}{2}
+\right).
 ```
 
-这样长度随速度增加，但始终有上界。
+Tracer 的方向直接取当前位置的共同场速度：
+
+```math
+\vartheta_i(t)
+=
+\operatorname{atan2}
+\left(
+v_{\psi,y}(X_i,t),
+v_{\psi,x}(X_i,t)
+\right).
+```
+
+长度只与速度弱绑定并保持上界。禁止使用 center + orbit 重新计算位置。
 
 ---
 
@@ -622,82 +641,51 @@ Ng = 3–4
 
 ---
 
-## 15. 同一 spectrum，不同 observable
+## 15. 同一谱场，不同物种耦合
 
-整个网站不要让所有对象共享同一个 `z(t)`。
+Tracer 共享完全相同的 v_ψ，只因初始状态不同而位于不同积分曲线上。
 
-正确模型是：
+花瓣、萤火虫与草仍保留自己的物种动力，但可以用不同耦合系数读取同一个场：
 
 ```math
-z_q(t)
+\dot X_{\mathrm{tracer}}=v_\psi,
+```
+
+```math
+\dot X_{\mathrm{firefly}}
 =
-\ell_q(U(t)f_q).
+0.7v_\psi+0.3u_{\mathrm{local}},
 ```
-
-`U(t)` 相同。
-
-但：
 
 ```math
-f_q
+\dot X_{\mathrm{sakura}}
+=
+0.45v_\psi+g+w.
 ```
 
-和
-
-```math
-\ell_q
-```
-
-可以不同。
-
-有限维实现里，这等价于：
-
-```text
-same λ_j
-different c_qj
-```
-
-这正是泛函分析意义上最自然的“同一动力系统，不同观测”。
+因此统一感来自一个位置相关的全局场，而不是“所有对象使用同一条轨迹”，也不是“每个粒子拥有自己的谱轨道”。
 
 ---
 
-## 16. 点击交互：phase impulse
+## 16. 点击交互：全局场的局部 phase impulse
 
-Field Mode 下点击不要添加一个外部随机力。
+Field Mode 下点击不添加独立粒子系统，也不修改某个 tracer 私有相位。
 
-保持 spectral family 的做法是修改初始相位。
-
-对点击位置 `p`，第 q 个对象距离为：
+对点击位置 p，在全局谱场相位中加入短时、局部、确定性的偏置：
 
 ```math
-d_q
+\theta_m(x,t)
 =
-\lVert X_q-p\rVert.
-```
-
-局部 phase kick：
-
-```math
-\phi_{q,j}
-\leftarrow
-\phi_{q,j}
+k_m\cdot x-\lambda_m t+\phi_m
 +
-A
-\exp
-\left(
--\frac{d_q^2}{2\sigma^2}
+A_m
+\exp\left(
+-\frac{\lVert x-p\rVert^2}{2\sigma^2}
 \right)
-\xi_j.
+\exp(-\kappa(t-t_0)).
 ```
 
-其中 `ξ_j` 是预先固定的 mode 权重。
-
-这样点击后：
-
-- 轨迹立即偏转；
-- 频率不变；
-- 仍然属于同一谱流；
-- 不需要额外物理系统。
+附近所有 tracer 都读取同一个受扰速度场。因此点击后会共同偏转，但频率、全局时钟和持久粒子状态都不重置。
 
 ---
 
@@ -723,47 +711,41 @@ g_j(p_t).
 
 ## 18. DOM obstacle：只改变 screen embedding
 
-网页卡片不应该改变 `U(t)`。
+网页卡片不改变 ψ、v_ψ 或 RK2 状态推进。
 
-否则基础算子会依赖页面布局，数学结构会变得混乱。
-
-定义 canonical position：
+定义 canonical particle state：
 
 ```math
-Y_q(t)
-=
-X_{c,q}
-+
-s_q
-\begin{pmatrix}
-\Re z_q(t)\\
-\Im z_q(t)
-\end{pmatrix}.
+Y_i(t)=X_i(t),
+\qquad
+\dot X_i=v_\psi(X_i,t).
 ```
 
 最终屏幕位置：
 
 ```math
-X_q(t)
+X_i^{\mathrm{screen}}(t)
 =
-W_\Omega(Y_q(t)).
+W_\Omega(Y_i(t)).
 ```
 
-`W_Ω` 是由 DOM 几何决定的 soft warp。
+W_Ω 是由 DOM 几何决定的 soft warp。
 
 因此：
 
 ```text
-spectral dynamics
+fractional spectral evolution
     ↓
-canonical orbit
+global ψ(x,t)
+    ↓
+shared particle advection
     ↓
 screen warp
     ↓
 render
 ```
 
-算子动力学和 UI 几何保持解耦。
+动力学和 UI 几何保持解耦。
 
 ---
 
@@ -911,126 +893,59 @@ r_j
 
 ---
 
-## 23. 高效递推
+## 23. WebGL2 transform feedback
 
-直接每帧计算：
+后景 tracer 的位置是持久状态，不能由当前时间直接解析重算。
 
-```math
-e^{i\lambda_jt}
+使用两组 GPU buffer 保存：
+
+```text
+x, y, age, seed
 ```
 
-会调用大量 `sin/cos`。
+每帧流程：
 
-更适合 GPU / JS 的方法是递推。
-
-记：
-
-```math
-u_j(t)
-=
-e^{i\lambda_jt}.
+```text
+state A
+  ↓ update shader + RK2
+state B
+  ↓ render shader
+instanced tracer quads
+  ↓ swap
+state B becomes next input
 ```
 
-固定帧间隔 `Δt`：
-
-```math
-g_j
-=
-e^{i\lambda_j\Delta t}.
-```
-
-则：
-
-```math
-u_j(t+\Delta t)
-=
-u_j(t)g_j.
-```
-
-即每个 mode 每帧只需要一次复数乘法。
-
-对第 q 个 tracer：
-
-```math
-u_{q,j}(0)
-=
-e^{i\phi_{q,j}}.
-```
-
-之后：
-
-```math
-u_{q,j}
-\leftarrow
-u_{q,j}g_j.
-```
-
-最后：
-
-```math
-z_q
-=
-\sum_j r_{q,j}u_{q,j}.
-```
-
-这非常适合大量 tracer。
+Update shader 只调用共享的 fieldVelocityAt，不读取每粒子 phase 或 amplitude。Render shader在当前位置再次读取同一速度场，以决定短光丝方向。
 
 ---
 
 ## 24. Variable dt
 
-浏览器帧率不是严格固定。
+浏览器帧率不是严格固定。每帧使用实际 Δt，但对过大的间隔设上界，避免标签页恢复或卡顿后一帧跨越过远。
 
-若 `Δt` 变化，可以每帧计算全局：
+RK2 的两个采样时刻必须是：
 
 ```math
-g_j(\Delta t)
-=
-e^{i\lambda_j\Delta t}.
+t_n,
+\qquad
+t_n+\frac{\Delta t}{2}.
 ```
 
-然后所有 tracer 共享同一个 `g_j`。
-
-因此每帧 trig 次数约为：
-
-```text
-number of modes
-```
-
-而不是：
-
-```text
-number of tracers × number of modes
-```
+性能档切换时保持全局谱时间不变。粒子状态可以在 Field Mode 淡出后冻结；再次进入时从原状态继续，不能重新随机整组 buffer。
 
 ---
 
-## 25. 数值漂移
+## 25. 生命周期与数值稳定
 
-持续复乘会有模长漂移。
+Tracer 生命周期推荐 12–28 秒。寿命结束时：
 
-因此每隔若干帧做：
+1. alpha 完成淡出；
+2. seed 确定性推进；
+3. 在另一屏幕区域重置位置状态；
+4. age 归零并淡入；
+5. 全局 ψ、λ_m、c_m、k_m、φ_m 不变。
 
-```math
-u_{q,j}
-\leftarrow
-\frac{u_{q,j}}{|u_{q,j}|}.
-```
-
-或者周期性根据：
-
-```math
-\lambda_j t+\phi_{q,j}
-```
-
-重新计算一次精确相位。
-
-推荐：
-
-```text
-每 2–5 秒 re-normalize
-每 20–60 秒 exact resync
-```
+谱零点附近通过 ε 正则化分母，并对最终速度设置平滑上界。屏幕边界使用 wrap，以维持粒子数并避免硬碰撞。
 
 ---
 
@@ -1170,32 +1085,41 @@ attractor
 
 ## 30. 推荐默认 tracer preset
 
-第一版可以直接用：
+第一版使用：
 
 ```text
 alpha = 1.5
 beta = 0.18
 
-modes:
+mode indices:
 [2, 3, 5, 7, 11, 13]
 
-amplitude envelope:
-r_j ∝ (j + 1.5)^(-1.4)
+shared wave directions:
+[0.18, 1.35, 2.55, 3.58, 4.72, 5.68]
 
-phase:
-φ_qj = hash(seed, q, j) × 2π
+wave-number scale:
+0.42
 
-center:
-side-weighted random distribution
+radial mix μ:
+0.22
 
-scale:
-0.03–0.12 viewport width
+regularizer ε:
+0.05
+
+flow speed:
+0.14
+
+persistent state:
+(x, y, age, seed)
 
 lifetime:
-8–20 s
+12–28 s
+
+integrator:
+midpoint / RK2
 ```
 
-这已经足够产生明显但不俗套的谱轨迹。
+这套参数的目标是产生少量缓慢迁移的谱涡旋，让大量 tracer 显示为共同流动，而不是增加粒子数量制造密度。
 
 ---
 
@@ -1239,35 +1163,58 @@ foreground subset: sparse
 
 ## 32. 最终核心公式
 
-整个网站的数学核心可以写成：
+整个 tracer 动力链写成：
 
 ```math
 \boxed{
-\gamma_q(t)
+\psi_t
 =
-\Pi_q
-\left(
-e^{it(-\Delta)^{3/4}}f_q
-\right)
+e^{-it(-\Delta)^{3/4}}\psi_0
 }
 ```
-
-其中：
-
-- `f_q`：第 q 个可视对象的初始态；
-- `e^{it(-Δ)^{3/4}}`：统一 fractional unitary flow；
-- `Π_q`：对象自己的二维观测。
-
-有限维实现就是：
 
 ```math
 \boxed{
-z_q(t)
+v_\psi(x,t)
 =
-\sum_{j=1}^{N_q}
-c_{q,j}
-e^{i\beta m_j^{3/2}t}.
+\frac{
+\operatorname{Im}(\bar\psi\nabla\psi)
++
+\mu\operatorname{Re}(\bar\psi\nabla\psi)
+}{
+|\psi|^2+\varepsilon
+}
 }
 ```
 
-这是最终应当真正写进实现的轨迹公式。
+```math
+\boxed{
+\dot X_i(t)=v_\psi(X_i(t),t)
+}
+```
+
+有限 mode 实现为：
+
+```math
+\boxed{
+\psi(x,t)
+=
+\sum_{m=1}^{M}
+c_m
+e^{i(k_m\cdot x-\beta |m|^{3/2}t+\phi_m)}
+}
+```
+
+数学层级必须保持：
+
+```text
+fractional unitary evolution
+    ↓
+global spectral field
+    ↓
+shared velocity field
+    ↓
+particle advection
+```
+
+不得退回“每个粒子各自拥有一条 Fourier orbit”的实现。
