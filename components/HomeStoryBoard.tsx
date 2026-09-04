@@ -1,6 +1,7 @@
 import Image from "next/image"
 
 import ThemeToggleBlock from "./ThemeToggleBlock"
+import PerformanceToggleBlock from "./PerformanceToggleBlock"
 
 export default function HomeStoryBoard() {
   return (
@@ -8,11 +9,18 @@ export default function HomeStoryBoard() {
       className="grid grid-cols-1 gap-5 lg:grid-cols-12 lg:items-stretch"
       aria-label="主题与个人照片"
     >
-      <div className="min-h-[280px] lg:col-span-4 lg:min-h-[340px]">
+      <div
+        className="grid min-h-[280px] grid-cols-1 gap-4 sm:grid-cols-2 lg:col-span-4 lg:min-h-[340px] lg:grid-cols-1 lg:grid-rows-2"
+        data-field-obstacle
+      >
         <ThemeToggleBlock />
+        <PerformanceToggleBlock />
       </div>
 
-      <figure className="group relative min-h-[320px] overflow-hidden rounded-[2rem] border border-white/55 bg-white/45 shadow-[0_24px_70px_-36px_rgba(15,23,42,0.65)] backdrop-blur-xl lg:col-span-8 lg:min-h-[340px] dark:border-white/10 dark:bg-slate-900/45">
+      <figure
+        className="group relative min-h-[320px] overflow-hidden rounded-[2rem] border border-white/55 bg-white/45 shadow-[0_24px_70px_-36px_rgba(15,23,42,0.65)] backdrop-blur-xl lg:col-span-8 lg:min-h-[340px] dark:border-white/10 dark:bg-slate-900/45"
+        data-field-obstacle
+      >
         <Image
           src="/profile-studio.png"
           alt="灯光下的个人研究工作台"

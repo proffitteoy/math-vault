@@ -2,13 +2,13 @@ import "katex/dist/katex.min.css"
 import type { Metadata } from "next"
 import "./globals.css"
 import { ThemeProvider } from "../components/ThemeProvider"
-import BackgroundEffects from "../components/BackgroundEffects"
+import FieldScene from "../components/FieldScene"
 import { MusicProvider } from "../components/MusicProvider"
 import FloatingPlayer from "../components/FloatingPlayer"
 import { siteConfig } from "../siteConfig"
-import ClickEffect from "../components/ClickEffect"
 import BackgroundSlider from "../components/BackgroundSlider"
 import SplashScreen from "../components/SplashScreen"
+import { FieldModeProvider } from "../components/FieldModeProvider"
 
 import MobileBackButton from "../components/MobileBackButton"
 
@@ -67,46 +67,40 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
 
       <body className="w-screen overflow-x-hidden min-h-full flex flex-col relative transition-colors duration-1000 bg-slate-50 dark:bg-slate-950 font-serif">
         <ThemeProvider>
-          <SplashScreen />
+          <FieldModeProvider>
+            <SplashScreen />
 
-          <MusicProvider>
-            <div
-              id="app-mount-root"
-              className="flex-1 flex flex-col transition-opacity duration-1000"
-            >
-              <div className="pointer-events-none fixed inset-0 z-0 overflow-hidden">
-                {!siteConfig.useGradient && <BackgroundSlider />}
-                <div
-                  className="absolute inset-0 z-[1] bg-white/[0.12] transition-colors duration-1000 dark:bg-slate-950/25"
-                  style={{
-                    backgroundImage: `linear-gradient(135deg, ${siteConfig.themeColors
-                      .map((color) => `${color}24`)
-                      .join(", ")})`,
-                  }}
-                />
+            <MusicProvider>
+              <div
+                id="app-mount-root"
+                className="flex-1 flex flex-col transition-opacity duration-1000"
+              >
+                <div className="pointer-events-none fixed inset-0 z-0 overflow-hidden">
+                  {!siteConfig.useGradient && <BackgroundSlider />}
+                  <div
+                    className="absolute inset-0 z-[1] bg-white/[0.12] transition-colors duration-1000 dark:bg-slate-950/25"
+                    style={{
+                      backgroundImage: `linear-gradient(135deg, ${siteConfig.themeColors
+                        .map((color) => `${color}24`)
+                        .join(", ")})`,
+                    }}
+                  />
+                </div>
 
-                <div className="absolute inset-0 z-[2] hidden h-full w-full md:block">
-                  <BackgroundEffects />
+                <FieldScene />
+
+                <div className="relative z-10 flex-1 flex flex-col">{children}</div>
+
+                <div className="hidden md:block">
+                  <FloatingPlayer />
+                </div>
+
+                <div className="md:hidden block">
+                  <MobileBackButton />
                 </div>
               </div>
-
-              <div className="relative z-10 flex-1 flex flex-col">{children}</div>
-
-              <div className="hidden md:block">
-                <FloatingPlayer />
-              </div>
-
-              <div className="md:hidden block">
-                <MobileBackButton />
-              </div>
-
-              {/* 隐藏手机端点击粒子 */}
-              <div className="hidden md:block">
-                <ClickEffect />
-              </div>
-            </div>
-
-          </MusicProvider>
+            </MusicProvider>
+          </FieldModeProvider>
         </ThemeProvider>
       </body>
     </html>

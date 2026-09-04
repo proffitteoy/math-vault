@@ -106,6 +106,7 @@ export default function Navbar() {
     <>
       {/* PC端导航栏 */}
       <header
+        data-field-obstacle
         className={`hidden md:block w-full fixed top-0 left-0 right-0 z-50 transition-all duration-500 border-b ${showNav ? "translate-y-0" : "-translate-y-full"} bg-white/40 dark:bg-slate-900/50 backdrop-blur-xl border-white/20 dark:border-white/5 shadow-sm`}
       >
         <div className="w-[90%] max-w-6xl mx-auto h-16 flex items-center justify-between px-4 sm:px-[30px] box-border">
