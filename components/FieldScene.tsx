@@ -13,19 +13,18 @@ const FIELD_BETA = 0.18
 const MODE_INDICES = [2, 3, 5, 7, 11, 13] as const
 const LAMBDAS = MODE_INDICES.map((mode) => FIELD_BETA * Math.pow(mode, 1.5))
 const FIELD_MODE_PHASES = [0.31, 2.17, 4.02, 5.41, 1.24, 3.52] as const
-const SPIRAL_MODE_AMPLITUDES = MODE_INDICES.map((mode) => Math.pow(mode, -1.3))
-const MAX_TRACERS = 2400
-const MAX_ACTIVE_TRACERS = 900
-const TRAIL_SAMPLES = 12
+const ORBIT_AMPLITUDES = [0.42, 0.36, 0.3, 0.25, 0.2, 0.16] as const
+const FIELD_TRACER_COUNT = 600
+const TRACER_COVER_SECONDS = 180
+const TRAIL_SAMPLES = 16
 const TRAIL_SEGMENTS = TRAIL_SAMPLES - 1
-const TRACER_LIFETIME = 10
 const MAX_OBSTACLES = 8
 const EFFECT_COUNTS = {
   sakura: 40,
   fireflies: 50,
   grass: 150,
   danmaku: 15,
-  foregroundTracer: 96,
+  foregroundTracer: 90,
 } as const
 
 type Spectrum = {
@@ -41,12 +40,6 @@ type Obstacle = {
   bottom: number
 }
 
-type Impulse = {
-  x: number
-  y: number
-  startedAt: number
-}
-
 type Ripple = {
   x: number
   y: number
@@ -55,11 +48,9 @@ type Ripple = {
   velocity: number
 }
 
-type SpiralTracer = {
+type OrbitTracer = {
   seed: number
-  phase: number
-  laneOffset: number
-  speedScale: number
+  timeJitter: number
   brightness: number
   trailDuration: number
   widthScale: number
@@ -74,7 +65,7 @@ type FieldQuality = {
 }
 
 const FIELD_QUALITY: FieldQuality[] = [
-  { foregroundCount: 96, tracerRatio: 1, pixelRatio: 1.5, modeCount: 6, frameMs: 1000 / 60 },
+  { foregroundCount: 90, tracerRatio: 1, pixelRatio: 1.5, modeCount: 6, frameMs: 1000 / 60 },
   { foregroundCount: 48, tracerRatio: 1, pixelRatio: 1.5, modeCount: 6, frameMs: 1000 / 60 },
   { foregroundCount: 48, tracerRatio: 0.68, pixelRatio: 1.5, modeCount: 6, frameMs: 1000 / 60 },
   { foregroundCount: 48, tracerRatio: 0.68, pixelRatio: 1, modeCount: 6, frameMs: 1000 / 60 },
@@ -82,77 +73,42 @@ const FIELD_QUALITY: FieldQuality[] = [
   { foregroundCount: 32, tracerRatio: 0.55, pixelRatio: 1, modeCount: 4, frameMs: 1000 / 30 },
 ]
 
-const MASTER_SPIRAL_GLSL = String.raw`
+const SPECTRAL_ORBIT_GLSL = String.raw`
 uniform float uTime;
 uniform float uModeCount;
-uniform vec2 uPointer;
-uniform vec4 uImpulse;
 uniform float uLambda[6];
 uniform vec2 uResolution;
+uniform float uTracerCount;
 
-const float MODE_VALUES[6] = float[6](2.0, 3.0, 5.0, 7.0, 11.0, 13.0);
+const float MODE_AMPLITUDES[6] = float[6](0.42, 0.36, 0.30, 0.25, 0.20, 0.16);
 const float MODE_PHASES[6] = float[6](0.31, 2.17, 4.02, 5.41, 1.24, 3.52);
 
 float hash11(float value) {
   return fract(sin(value * 127.1) * 43758.5453123);
 }
 
-float interactionPhase(vec2 position, float time, float modeIndex) {
-  float impulseAge = time - uImpulse.z;
-  float impulseBias = 0.0;
-  if (impulseAge >= 0.0 && impulseAge < 2.8) {
-    float distanceSquared = dot(position - uImpulse.xy, position - uImpulse.xy);
-    impulseBias =
-      uImpulse.w *
-      exp(-distanceSquared / max(16000.0, pow(min(uResolution.x, uResolution.y) * 0.22, 2.0))) *
-      exp(-impulseAge * 1.35);
-  }
-  float pointerBias =
-    0.16 *
-    exp(-dot(position - uPointer, position - uPointer) /
-      max(10000.0, pow(min(uResolution.x, uResolution.y) * 0.16, 2.0)));
-  return impulseBias * (0.35 + modeIndex * 0.13) +
-    pointerBias * (mod(modeIndex, 2.0) < 1.0 ? 1.0 : -1.0);
-}
-
-vec2 spiralCenterline(float u, float time) {
-  float diagonal = length(uResolution);
-  float shortSide = min(uResolution.x, uResolution.y);
-  float radiusMax = 0.65 * diagonal;
-  float radiusMin = 0.035 * shortSide;
-  float radius = mix(radiusMin, radiusMax, pow(1.0 - u, 0.82));
-  float angle = -0.42 + 6.28318530718 * (2.15 * u + 0.12 * u * u);
-  vec2 radial = vec2(cos(angle), sin(angle));
-  vec2 tangent = vec2(-radial.y, radial.x);
-  vec2 base = vec2(0.50 * uResolution.x, 0.48 * uResolution.y) + radius * radial;
-  vec2 spectral = vec2(0.0);
+vec2 spectralOrbit(float time) {
+  vec2 value = vec2(0.0);
   float amplitudeSum = 0.0;
 
   for (int index = 0; index < 6; index++) {
     if (float(index) >= uModeCount) {
       continue;
     }
-    float mode = MODE_VALUES[index];
-    float amplitude = pow(mode, -1.3);
-    float theta =
-      6.28318530718 * mode * u -
-      uLambda[index] * time +
-      MODE_PHASES[index] +
-      interactionPhase(base, time, float(index));
-    spectral += amplitude * vec2(cos(theta), sin(theta));
+    float amplitude = MODE_AMPLITUDES[index];
+    float theta = uLambda[index] * time + MODE_PHASES[index];
+    value += amplitude * vec2(cos(theta), sin(theta));
     amplitudeSum += amplitude;
   }
-  spectral /= max(amplitudeSum, 0.0001);
-  return base + radial * (0.038 * radiusMax * spectral.x) +
-    tangent * (0.060 * radiusMax * spectral.y);
+  return value / max(amplitudeSum, 0.0001);
 }
 
-vec2 spiralPoint(float u, float time, float laneOffset) {
-  vec2 center = spiralCenterline(u, time);
-  vec2 before = spiralCenterline(max(0.0, u - 0.0015), time);
-  vec2 after = spiralCenterline(min(1.0, u + 0.0015), time);
-  vec2 direction = normalize(after - before + vec2(0.0001));
-  return center + vec2(-direction.y, direction.x) * laneOffset;
+vec2 orbitPoint(float time) {
+  vec2 normalized = spectralOrbit(time);
+  return vec2(
+    (0.5 + 0.5 * normalized.x) * uResolution.x,
+    (0.5 - 0.5 * normalized.y) * uResolution.y
+  );
 }
 `
 
@@ -165,7 +121,7 @@ uniform vec4 uObstacles[8];
 uniform int uObstacleCount;
 uniform float uPass;
 
-${MASTER_SPIRAL_GLSL}
+${SPECTRAL_ORBIT_GLSL}
 
 out float vAlpha;
 out float vTheme;
@@ -173,35 +129,34 @@ out float vShade;
 
 void main() {
   float seed = float(gl_InstanceID + 1);
-  float phase = hash11(seed * 2.71 + 7.9);
-  float speedScale = mix(0.88, 1.12, hash11(seed * 4.17 + 2.3));
-  float laneOffset = mix(-10.0, 10.0, hash11(seed * 5.31 + 8.7));
-  float trailDuration = mix(0.25, 0.45, hash11(seed * 7.13 + 1.9));
+  float spacing = ${TRACER_COVER_SECONDS}.0 / max(uTracerCount, 1.0);
+  float timeOffset =
+    ((seed - 0.5) / max(uTracerCount, 1.0)) * ${TRACER_COVER_SECONDS}.0 +
+    (hash11(seed * 4.17 + 2.3) - 0.5) * spacing * 0.35;
+  float trailDuration = mix(0.25, 0.40, hash11(seed * 7.13 + 1.9));
   int segment = gl_VertexID / 6;
   int corner = gl_VertexID - segment * 6;
   float segmentStart = float(segment) / float(${TRAIL_SEGMENTS});
   float segmentEnd = float(segment + 1) / float(${TRAIL_SEGMENTS});
-  float startTime = uTime - segmentStart * trailDuration;
-  float endTime = uTime - segmentEnd * trailDuration;
-  float startProgress = phase + startTime * speedScale / ${TRACER_LIFETIME}.0;
-  float endProgress = phase + endTime * speedScale / ${TRACER_LIFETIME}.0;
-  float startU = fract(startProgress);
-  float endU = fract(endProgress);
-  vec2 start = spiralPoint(startU, startTime, laneOffset);
-  vec2 end = spiralPoint(endU, endTime, laneOffset);
+  float startTime = uTime + timeOffset - segmentStart * trailDuration;
+  float endTime = uTime + timeOffset - segmentEnd * trailDuration;
+  vec2 start = orbitPoint(startTime);
+  vec2 end = orbitPoint(endTime);
   bool useStart = corner == 0 || corner == 3 || corner == 5;
   float side = corner == 0 || corner == 1 || corner == 3 ? -1.0 : 1.0;
   vec2 position = useStart ? start : end;
   vec2 direction = normalize(start - end + vec2(0.0001));
   vec2 normal = vec2(-direction.y, direction.x);
   float coreWidth = mix(
-    mix(2.2, 3.2, hash11(seed * 8.73)),
-    mix(1.8, 2.8, hash11(seed * 8.73)),
+    mix(2.8, 3.8, hash11(seed * 8.73)),
+    mix(2.5, 3.5, hash11(seed * 8.73)),
     uTheme
   );
-  float glowWidth = mix(6.0, 10.0, hash11(seed * 9.91));
+  float glowWidth = mix(8.0, 12.0, hash11(seed * 9.91));
   float width = mix(coreWidth, glowWidth, uPass);
-  if (segment == 0 && useStart) width *= mix(1.55, 1.25, uPass);
+  if (segment == 0 && useStart && uPass < 0.5) {
+    width = mix(4.0, 6.0, hash11(seed * 3.57));
+  }
   position += normal * side * width * 0.5;
   float obstacleShade = 1.0;
 
@@ -219,15 +174,20 @@ void main() {
   }
 
   float flowAlpha = pow(1.0 - segmentStart, 1.25);
-  float lifeFade =
-    smoothstep(0.0, 0.075, startU) *
-    (1.0 - smoothstep(0.88, 1.0, startU));
-  float sameCycle =
-    1.0 - step(0.5, abs(floor(startProgress) - floor(endProgress)));
-  float brightness = mix(0.84, 1.0, hash11(seed * 6.41));
+  float brightness = hash11(seed * 6.41);
+  float coreAlpha = mix(
+    mix(0.65, 0.85, brightness),
+    mix(0.80, 0.95, brightness),
+    uTheme
+  );
+  float glowAlpha = mix(
+    mix(0.08, 0.14, brightness),
+    mix(0.14, 0.22, brightness),
+    uTheme
+  );
   float passAlpha = mix(
-    mix(0.70, 0.90, flowAlpha),
-    mix(0.10, 0.20, uTheme),
+    coreAlpha,
+    glowAlpha,
     uPass
   );
   vec2 clip = vec2(
@@ -238,9 +198,6 @@ void main() {
   vAlpha =
     passAlpha *
     flowAlpha *
-    lifeFade *
-    sameCycle *
-    brightness *
     uAlpha *
     obstacleShade;
   vTheme = uTheme;
@@ -257,20 +214,8 @@ in float vShade;
 out vec4 outColor;
 
 void main() {
-  vec3 dayA = vec3(0.157, 0.294, 0.561);
-  vec3 dayB = vec3(0.318, 0.275, 0.659);
-  vec3 dayC = vec3(0.455, 0.247, 0.612);
-  vec3 nightA = vec3(0.663, 0.831, 1.0);
-  vec3 nightB = vec3(0.749, 0.784, 1.0);
-  vec3 nightC = vec3(0.851, 0.757, 1.0);
-  vec3 daylight =
-    vShade < 0.5
-      ? mix(dayA, dayB, vShade * 2.0)
-      : mix(dayB, dayC, (vShade - 0.5) * 2.0);
-  vec3 night =
-    vShade < 0.5
-      ? mix(nightA, nightB, vShade * 2.0)
-      : mix(nightB, nightC, (vShade - 0.5) * 2.0);
+  vec3 daylight = mix(vec3(0.192, 0.353, 0.659), vec3(0.408, 0.275, 0.722), vShade);
+  vec3 night = mix(vec3(0.624, 0.847, 1.0), vec3(0.769, 0.710, 0.992), vShade);
   outColor = vec4(mix(daylight, night, vTheme), vAlpha);
 }
 `
@@ -292,119 +237,31 @@ function smoothstep(value: number) {
   return bounded * bounded * (3 - 2 * bounded)
 }
 
-function createSpiralTracer(seed: number): SpiralTracer {
+function createOrbitTracer(seed: number): OrbitTracer {
   return {
     seed,
-    phase: hash(seed, 7),
-    laneOffset: -10 + hash(seed, 8) * 20,
-    speedScale: 0.88 + hash(seed, 9) * 0.24,
+    timeJitter: hash(seed, 7) - 0.5,
     brightness: 0.84 + hash(seed, 10) * 0.16,
-    trailDuration: 0.25 + hash(seed, 11) * 0.2,
+    trailDuration: 0.25 + hash(seed, 11) * 0.15,
     widthScale: 0.88 + hash(seed, 12) * 0.24,
   }
 }
 
-function sampleInteractionPhase(
-  x: number,
-  y: number,
-  time: number,
-  modeIndex: number,
-  width: number,
-  height: number,
-  pointer: { x: number; y: number },
-  impulse: Impulse | undefined,
-) {
-  const impulseAge = impulse ? time - impulse.startedAt : 100
-  const impulseDistanceSquared = impulse
-    ? (x - impulse.x * width) ** 2 + (y - impulse.y * height) ** 2
-    : Infinity
-  const impulseBias =
-    impulse && impulseAge >= 0 && impulseAge < 2.8
-      ? Math.exp(
-          -impulseDistanceSquared / Math.max(16000, Math.pow(Math.min(width, height) * 0.22, 2)),
-        ) * Math.exp(-impulseAge * 1.35)
-      : 0
-  const pointerX = pointer.x * width
-  const pointerY = pointer.y * height
-  const pointerDistanceSquared = (x - pointerX) ** 2 + (y - pointerY) ** 2
-  const pointerBias =
-    0.16 *
-    Math.exp(-pointerDistanceSquared / Math.max(10000, Math.pow(Math.min(width, height) * 0.16, 2)))
-  return impulseBias * (0.35 + modeIndex * 0.13) + pointerBias * (modeIndex % 2 === 0 ? 1 : -1)
-}
-
-function sampleSpiralCenterline(
-  u: number,
-  time: number,
-  width: number,
-  height: number,
-  modeCount: number,
-  pointer: { x: number; y: number },
-  impulse: Impulse | undefined,
-) {
-  const radiusMax = 0.65 * Math.hypot(width, height)
-  const radiusMin = 0.035 * Math.min(width, height)
-  const radius = radiusMin + (radiusMax - radiusMin) * Math.pow(1 - u, 0.82)
-  const angle = -0.42 + TAU * (2.15 * u + 0.12 * u * u)
-  const radialX = Math.cos(angle)
-  const radialY = Math.sin(angle)
-  const baseX = width * 0.5 + radius * radialX
-  const baseY = height * 0.48 + radius * radialY
-  let spectralX = 0
-  let spectralY = 0
+function sampleOrbitPoint(time: number, width: number, height: number, modeCount: number) {
+  let real = 0
+  let imaginary = 0
   let amplitudeSum = 0
   for (let mode = 0; mode < Math.min(modeCount, MODE_INDICES.length); mode++) {
-    const amplitude = SPIRAL_MODE_AMPLITUDES[mode]
-    const theta =
-      TAU * MODE_INDICES[mode] * u -
-      LAMBDAS[mode] * time +
-      FIELD_MODE_PHASES[mode] +
-      sampleInteractionPhase(baseX, baseY, time, mode, width, height, pointer, impulse)
-    spectralX += amplitude * Math.cos(theta)
-    spectralY += amplitude * Math.sin(theta)
+    const amplitude = ORBIT_AMPLITUDES[mode]
+    const theta = LAMBDAS[mode] * time + FIELD_MODE_PHASES[mode]
+    real += amplitude * Math.cos(theta)
+    imaginary += amplitude * Math.sin(theta)
     amplitudeSum += amplitude
   }
-  spectralX /= Math.max(amplitudeSum, 0.0001)
-  spectralY /= Math.max(amplitudeSum, 0.0001)
+  const scale = Math.max(amplitudeSum, 0.0001)
   return {
-    x: baseX + radialX * (0.038 * radiusMax * spectralX) - radialY * (0.06 * radiusMax * spectralY),
-    y: baseY + radialY * (0.038 * radiusMax * spectralX) + radialX * (0.06 * radiusMax * spectralY),
-  }
-}
-
-function sampleMasterSpiralPoint(
-  u: number,
-  time: number,
-  laneOffset: number,
-  width: number,
-  height: number,
-  modeCount: number,
-  pointer: { x: number; y: number },
-  impulse: Impulse | undefined,
-) {
-  const center = sampleSpiralCenterline(u, time, width, height, modeCount, pointer, impulse)
-  const before = sampleSpiralCenterline(
-    Math.max(0, u - 0.0015),
-    time,
-    width,
-    height,
-    modeCount,
-    pointer,
-    impulse,
-  )
-  const after = sampleSpiralCenterline(
-    Math.min(1, u + 0.0015),
-    time,
-    width,
-    height,
-    modeCount,
-    pointer,
-    impulse,
-  )
-  const tangentLength = Math.max(Math.hypot(after.x - before.x, after.y - before.y), 0.0001)
-  return {
-    x: center.x - ((after.y - before.y) / tangentLength) * laneOffset,
-    y: center.y + ((after.x - before.x) / tangentLength) * laneOffset,
+    x: (0.5 + 0.5 * (real / scale)) * width,
+    y: (0.5 - 0.5 * (imaginary / scale)) * height,
   }
 }
 function sideWeightedPosition(index: number, seed: number) {
@@ -556,8 +413,7 @@ function createFieldRenderer(canvas: HTMLCanvasElement) {
     theme: gl.getUniformLocation(renderProgram, "uTheme"),
     modeCount: gl.getUniformLocation(renderProgram, "uModeCount"),
     resolution: gl.getUniformLocation(renderProgram, "uResolution"),
-    pointer: gl.getUniformLocation(renderProgram, "uPointer"),
-    impulse: gl.getUniformLocation(renderProgram, "uImpulse"),
+    tracerCount: gl.getUniformLocation(renderProgram, "uTracerCount"),
     lambda: gl.getUniformLocation(renderProgram, "uLambda[0]"),
     obstacles: gl.getUniformLocation(renderProgram, "uObstacles[0]"),
     obstacleCount: gl.getUniformLocation(renderProgram, "uObstacleCount"),
@@ -574,24 +430,16 @@ function createFieldRenderer(canvas: HTMLCanvasElement) {
     gl.viewport(0, 0, canvas.width, canvas.height)
   }
 
-  const setSpiralUniforms = (
+  const setOrbitUniforms = (
     time: number,
     modeCount: number,
     width: number,
     height: number,
-    pointer: { x: number; y: number },
-    impulse: Impulse | undefined,
+    tracerCount: number,
   ) => {
     gl.uniform1f(renderUniforms.time, time)
     gl.uniform1f(renderUniforms.modeCount, modeCount)
-    gl.uniform2f(renderUniforms.pointer, pointer.x * width, pointer.y * height)
-    gl.uniform4f(
-      renderUniforms.impulse,
-      impulse ? impulse.x * width : -10000,
-      impulse ? impulse.y * height : -10000,
-      impulse?.startedAt ?? -100,
-      impulse ? 1 : 0,
-    )
+    gl.uniform1f(renderUniforms.tracerCount, tracerCount)
     gl.uniform1fv(renderUniforms.lambda, LAMBDAS)
     gl.uniform2f(renderUniforms.resolution, width, height)
   }
@@ -602,10 +450,9 @@ function createFieldRenderer(canvas: HTMLCanvasElement) {
     theme,
     modeCount,
     tracerCount,
+    totalTracerCount,
     width,
     height,
-    pointer,
-    impulse,
     obstacles,
   }: {
     time: number
@@ -613,16 +460,15 @@ function createFieldRenderer(canvas: HTMLCanvasElement) {
     theme: number
     modeCount: number
     tracerCount: number
+    totalTracerCount: number
     width: number
     height: number
-    pointer: { x: number; y: number }
-    impulse: Impulse | undefined
     obstacles: Obstacle[]
   }) => {
     gl.clearColor(0, 0, 0, 0)
     gl.clear(gl.COLOR_BUFFER_BIT)
 
-    const activeCount = Math.min(tracerCount, MAX_ACTIVE_TRACERS, MAX_TRACERS)
+    const activeCount = Math.min(tracerCount, FIELD_TRACER_COUNT)
     if (alpha <= 0.001 || activeCount <= 0) return
 
     const obstacleData = new Float32Array(MAX_OBSTACLES * 4)
@@ -631,7 +477,7 @@ function createFieldRenderer(canvas: HTMLCanvasElement) {
     })
 
     gl.useProgram(renderProgram)
-    setSpiralUniforms(time, modeCount, width, height, pointer, impulse)
+    setOrbitUniforms(time, modeCount, width, height, totalTracerCount)
     gl.uniform1f(renderUniforms.alpha, alpha)
     gl.uniform1f(renderUniforms.theme, theme)
     gl.uniform4fv(renderUniforms.obstacles, obstacleData)
@@ -666,22 +512,18 @@ function pointShade(x: number, y: number, obstacles: Obstacle[]) {
 function tracerColor(shade: number, theme: number) {
   const palettes = [
     [
-      [40, 75, 143],
-      [81, 70, 168],
-      [116, 63, 156],
+      [49, 90, 168],
+      [104, 70, 184],
     ],
     [
-      [169, 212, 255],
-      [191, 200, 255],
-      [217, 193, 255],
+      [159, 216, 255],
+      [196, 181, 253],
     ],
   ]
   const samplePalette = (palette: number[][]) => {
-    const scaled = shade * 2
-    const from = scaled < 1 ? palette[0] : palette[1]
-    const to = scaled < 1 ? palette[1] : palette[2]
-    const mix = scaled < 1 ? scaled : scaled - 1
-    return from.map((channel, index) => Math.round(channel + (to[index] - channel) * mix))
+    return palette[0].map((channel, index) =>
+      Math.round(channel + (palette[1][index] - channel) * shade),
+    )
   }
   const daylight = samplePalette(palettes[0])
   const night = samplePalette(palettes[1])
@@ -770,7 +612,7 @@ export default function FieldScene() {
       }
     })
     const foregroundTracers = Array.from({ length: EFFECT_COUNTS.foregroundTracer }, (_, index) =>
-      createSpiralTracer(index + 10001),
+      createOrbitTracer(index + 10001),
     )
     const danmaku = siteConfig.danmakuList.length
       ? Array.from({ length: EFFECT_COUNTS.danmaku }, (_, index) => ({
@@ -784,8 +626,6 @@ export default function FieldScene() {
     const desktopQuery = window.matchMedia("(min-width: 768px)")
     const reducedMotionQuery = window.matchMedia("(prefers-reduced-motion: reduce)")
     const ripples: Ripple[] = []
-    const impulses: Impulse[] = []
-    const pointer = { x: -2, y: -2 }
     let obstacles: Obstacle[] = []
     let lastObstacleSample = -1000
     let fieldRenderer: ReturnType<typeof createFieldRenderer> = null
@@ -990,51 +830,51 @@ export default function FieldScene() {
       speciesContext.globalAlpha = 1
     }
 
-    const drawFront = (time: number, quality: FieldQuality) => {
+    const drawFront = (
+      time: number,
+      quality: FieldQuality,
+      backgroundCount: number,
+      totalTracerCount: number,
+    ) => {
       frontContext.clearRect(0, 0, width, height)
 
       const frontAlpha = smoothstep((fieldBlend - 0.58) / 0.42)
       if (frontAlpha > 0.001) {
         frontContext.lineCap = "round"
-        const latestImpulse = impulses[impulses.length - 1]
         const trails: Array<{
-          tracer: SpiralTracer
+          tracer: OrbitTracer
           points: Array<{ x: number; y: number }>
           color: number[]
           alpha: number
         }> = []
-        for (let index = 0; index < quality.foregroundCount; index++) {
+        const foregroundCount = Math.min(
+          quality.foregroundCount,
+          Math.max(0, totalTracerCount - backgroundCount),
+        )
+        const timeSpacing = TRACER_COVER_SECONDS / Math.max(totalTracerCount, 1)
+        for (let index = 0; index < foregroundCount; index++) {
           const tracer = foregroundTracers[index]
           const points = []
-          const headProgress = tracer.phase + (time * tracer.speedScale) / TRACER_LIFETIME
-          const headCycle = Math.floor(headProgress)
+          const globalIndex = backgroundCount + index
+          const timeOffset =
+            ((globalIndex + 0.5) / Math.max(totalTracerCount, 1)) * TRACER_COVER_SECONDS +
+            tracer.timeJitter * timeSpacing * 0.35
           for (let sample = 0; sample < TRAIL_SAMPLES; sample++) {
-            const sampleTime = time - (sample / TRAIL_SEGMENTS) * tracer.trailDuration
-            const progress = tracer.phase + (sampleTime * tracer.speedScale) / TRACER_LIFETIME
-            if (Math.floor(progress) !== headCycle) break
-            const u = wrap(progress, 1)
             points.push(
-              sampleMasterSpiralPoint(
-                u,
-                sampleTime,
-                tracer.laneOffset,
+              sampleOrbitPoint(
+                time + timeOffset - (sample / TRAIL_SEGMENTS) * tracer.trailDuration,
                 width,
                 height,
                 quality.modeCount,
-                pointer,
-                latestImpulse,
               ),
             )
           }
-          if (points.length < 2) continue
-          const headU = wrap(headProgress, 1)
-          const lifeFade = smoothstep(headU / 0.075) * (1 - smoothstep((headU - 0.88) / 0.12))
           const head = points[0]
           trails.push({
             tracer,
             points,
             color: tracerColor(hash(tracer.seed, 13), themeBlend),
-            alpha: frontAlpha * lifeFade * pointShade(head.x, head.y, obstacles),
+            alpha: frontAlpha * pointShade(head.x, head.y, obstacles),
           })
         }
 
@@ -1043,14 +883,17 @@ export default function FieldScene() {
           for (const { tracer, points, color, alpha } of trails) {
             const width =
               (glow
-                ? 6 + hash(tracer.seed, 14) * 4
-                : (2.2 + hash(tracer.seed, 15)) * (1 - themeBlend) +
-                  (1.8 + hash(tracer.seed, 15)) * themeBlend) * tracer.widthScale
+                ? 8 + hash(tracer.seed, 14) * 4
+                : (2.8 + hash(tracer.seed, 15)) * (1 - themeBlend) +
+                  (2.5 + hash(tracer.seed, 15)) * themeBlend) * tracer.widthScale
             for (let segment = 0; segment < points.length - 1; segment++) {
               const flowAlpha = Math.pow(1 - segment / TRAIL_SEGMENTS, 1.25)
+              const brightness = (tracer.brightness - 0.84) / 0.16
               const passAlpha = glow
-                ? 0.08 + themeBlend * 0.1
-                : 0.75 + ((tracer.brightness - 0.84) / 0.16) * 0.2
+                ? (0.08 + brightness * 0.06) * (1 - themeBlend) +
+                  (0.14 + brightness * 0.08) * themeBlend
+                : (0.65 + brightness * 0.2) * (1 - themeBlend) +
+                  (0.8 + brightness * 0.15) * themeBlend
               frontContext.globalAlpha = alpha * flowAlpha * passAlpha
               frontContext.strokeStyle = "rgb(" + color[0] + ", " + color[1] + ", " + color[2] + ")"
               frontContext.lineWidth = width
@@ -1060,8 +903,12 @@ export default function FieldScene() {
               frontContext.stroke()
             }
             if (!glow) {
-              const headWidth = 3.5 + hash(tracer.seed, 16) * 1.5
-              frontContext.globalAlpha = alpha * 0.9
+              const brightness = (tracer.brightness - 0.84) / 0.16
+              const headWidth = 4 + hash(tracer.seed, 16) * 2
+              frontContext.globalAlpha =
+                alpha *
+                ((0.65 + brightness * 0.2) * (1 - themeBlend) +
+                  (0.8 + brightness * 0.15) * themeBlend)
               frontContext.fillStyle = "rgb(" + color[0] + ", " + color[1] + ", " + color[2] + ")"
               frontContext.beginPath()
               frontContext.arc(points[0].x, points[0].y, headWidth * 0.5, 0, TAU)
@@ -1123,6 +970,9 @@ export default function FieldScene() {
       sampleObstacles(now)
       drawSpecies(time, cosines, sines, quality.modeCount)
 
+      const totalTracerCount = Math.round(FIELD_TRACER_COUNT * quality.tracerRatio)
+      const foregroundCount = Math.min(quality.foregroundCount, totalTracerCount)
+      const tracerCount = Math.max(0, totalTracerCount - foregroundCount)
       if (fieldBlend > 0.001) {
         if (!fieldRenderer) {
           fieldRenderer = createFieldRenderer(fieldCanvas)
@@ -1132,21 +982,15 @@ export default function FieldScene() {
             Math.min(window.devicePixelRatio || 1, quality.pixelRatio),
           )
         }
-        const totalTracerCount = Math.round(
-          clamp((width * height * 650) / (1920 * 1080), 500, MAX_ACTIVE_TRACERS) *
-            quality.tracerRatio,
-        )
-        const tracerCount = Math.max(0, totalTracerCount - quality.foregroundCount)
         fieldRenderer?.render({
           time,
           alpha: smoothstep(fieldBlend),
           theme: themeBlend,
           modeCount: quality.modeCount,
           tracerCount,
+          totalTracerCount,
           width,
           height,
-          pointer,
-          impulse: impulses[impulses.length - 1],
           obstacles,
         })
       } else {
@@ -1156,16 +1000,14 @@ export default function FieldScene() {
           theme: themeBlend,
           modeCount: quality.modeCount,
           tracerCount: 0,
+          totalTracerCount,
           width,
           height,
-          pointer,
-          impulse: undefined,
           obstacles,
         })
       }
 
-      drawFront(time, quality)
-      while (impulses.length && time - impulses[0].startedAt > 3) impulses.shift()
+      drawFront(time, quality, tracerCount, totalTracerCount)
 
       if (modeRef.current === "field" && !reducedMotionQuery.matches) {
         frameCount += 1
@@ -1229,14 +1071,7 @@ export default function FieldScene() {
     }
 
     const handleClick = (event: MouseEvent) => {
-      if (modeRef.current === "field") {
-        impulses.push({
-          x: event.clientX / Math.max(width, 1),
-          y: event.clientY / Math.max(height, 1),
-          startedAt: (performance.now() - startTime) / 1000,
-        })
-        if (impulses.length > 4) impulses.shift()
-      } else {
+      if (modeRef.current !== "field") {
         ripples.push({
           x: event.clientX,
           y: event.clientY,
@@ -1247,15 +1082,9 @@ export default function FieldScene() {
       }
     }
 
-    const handlePointerMove = (event: PointerEvent) => {
-      pointer.x = event.clientX / Math.max(width, 1)
-      pointer.y = event.clientY / Math.max(height, 1)
-    }
-
     window.addEventListener("resize", handleResize)
     window.addEventListener("scroll", handleScroll, { passive: true })
     window.addEventListener("click", handleClick)
-    window.addEventListener("pointermove", handlePointerMove, { passive: true })
     document.addEventListener("visibilitychange", syncAnimation)
     desktopQuery.addEventListener("change", syncAnimation)
     reducedMotionQuery.addEventListener("change", syncAnimation)
@@ -1267,7 +1096,6 @@ export default function FieldScene() {
       window.removeEventListener("resize", handleResize)
       window.removeEventListener("scroll", handleScroll)
       window.removeEventListener("click", handleClick)
-      window.removeEventListener("pointermove", handlePointerMove)
       document.removeEventListener("visibilitychange", syncAnimation)
       desktopQuery.removeEventListener("change", syncAnimation)
       reducedMotionQuery.removeEventListener("change", syncAnimation)

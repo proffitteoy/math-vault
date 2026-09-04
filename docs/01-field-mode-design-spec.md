@@ -225,7 +225,7 @@ Math.random()
 
 在各个子组件里各自决定自己的长期运动。
 
-随机性只允许用于初始化：
+物种元素的随机性只允许用于初始化：
 
 - phase；
 - amplitude；
@@ -234,7 +234,7 @@ Math.random()
 - lifetime；
 - species parameters。
 
-初始化以后，轨迹必须 deterministic。
+初始化以后，轨迹必须 deterministic。Tracer 是例外中的更严格情形：它不能拥有独立 phase、amplitude 或 center，只允许从 seed 得到很小的确定性 time jitter 和视觉参数。
 
 ---
 
@@ -258,18 +258,26 @@ Math.random()
 \lambda_m = \beta m^{3/2}.
 ```
 
-Tracer 不再让二维速度场决定宏观方向。所有 tracer 共享唯一的跨屏母螺旋 `Γ(u,t)`，fractional spectrum 只负责对母轨道做小幅形变。seed 只决定出生相位、法向 lane、速度、亮度、尾迹时长和视觉尺寸。
+Tracer 直接使用同一个二维线性观测轨道：
+
+```math
+\gamma(t)=\sum_jc_je^{i\beta m_j^{3/2}t}.
+```
+
+第 `k` 个 tracer 只取 `γ(t+τ_k)`。seed 只能决定小幅 time jitter、亮度、尾迹时长和视觉尺寸；不能生成粒子私有 phase、amplitude、center、lane 或速度尺度。
 
 花瓣、萤火虫与草可按各自惯性和物种运动逐步耦合这个场；它们不能反过来让 tracer 退化为独立的 Fourier orbit。
 
 ```text
 fractional spectrum
     ↓
-shared deformation q(u,t)
+one orbit γ(t)
     ↓
-one master spiral Γ(u,t)
+shared time translations τ_k
     ↓
-analytic tracer samples
+viewport affine map
+    ↓
+historical trail samples
 ```
 
 ---
@@ -278,97 +286,52 @@ analytic tracer samples
 
 Tracer 是 Field Mode 的主视觉，不是“粒子点”。
 
-### 9.0 当前实现：唯一母螺旋
+### 9.0 当前实现：唯一 fractional spectral orbit
 
-所有 tracer 共享一条覆盖整个 viewport 的解析曲线：
-
-```math
-z_0(u)=r(u)e^{i\theta(u)},\quad
-r(u)=r_{\min}+(r_{\max}-r_{\min})(1-u)^{0.82},
-\quad
-\theta(u)=\theta_0+2\pi(2.15u+0.12u^2).
-```
-
-`r_max = 0.65 × viewport diagonal`，`r_min = 0.035 × min(width, height)`，中心位于 `(0.50W, 0.48H)`。fractional spectrum 只作为 3.8% 径向、6.0% 切向形变：
+所有 tracer 共享一条解析曲线：
 
 ```math
-q(u,t)=
-\sum_{m\in\{2,3,5,7,11,13\}}
-a_m e^{i(2\pi mu-\beta m^{3/2}t+\phi_m)},
-\qquad a_m\propto m^{-1.3}.
+z(t)=\sum_jc_je^{i\beta m_j^{3/2}t}.
 ```
 
-每个 tracer 解析采样 `X_j(t)=Γ(u_j(t),t)+δ_jN(u_j,t)`，其中 `|δ_j|≤10 px`。后景 WebGL2 由 `gl_InstanceID` 和时间直接生成位置；前景 Canvas2D 使用同一公式。不保存位置 buffer，不运行 RK2 或 transform feedback。
+当前 mode、amplitude 和时间平移为：
 
-默认 1920×1080 约 650 个 tracer，最高 900；前后景约 85%/15%。每条尾迹用 12 个样本覆盖 0.25–0.45 秒，core 为 1.8–3.2 px、head 为 3.5–5 px、glow 为 6–10 px。障碍物只衰减 alpha，不能改变 `Γ`。
+```text
+modes       = [2, 3, 5, 7, 11, 13]
+amplitudes  = [0.42, 0.36, 0.30, 0.25, 0.20, 0.16]
+beta        = 0.18
+tracers     = 600
+Tcover      = 180 s
+```
 
-### 9.0a 旧速度场方案（已废弃）
-
-以下 9.0a–9.6 仅保留旧方案的推导记录，不再作为当前 tracer 的实现约束。
-
-定义整个平面共享的复值谱场：
+屏幕位置只做二维 affine map：
 
 ```math
-\psi(x,t)
-=
-\sum_{m=1}^{M}
-c_m e^{i(k_m\cdot x-\lambda_m t+\phi_m)}.
+X_k(t)=b+M
+\begin{pmatrix}
+\Re z(t+\tau_k)\\
+\Im z(t+\tau_k)
+\end{pmatrix}.
 ```
 
-由它生成速度场：
-
-```math
-v_\psi(x,t)
-=
-\frac{
-\operatorname{Im}(\bar\psi\nabla\psi)
-+
-\mu\operatorname{Re}(\bar\psi\nabla\psi)
-}{
-|\psi|^2+\varepsilon
-}.
-```
-
-每个 tracer 只保存持久状态 (x, y, age, seed)，并满足同一个常微分方程：
-
-```math
-\dot X_i(t)=v_\psi(X_i(t),t).
-```
-
-使用 midpoint / RK2 推进：
-
-```math
-K_1=v_\psi(X_i^n,t_n),
-```
-
-```math
-X_i^{n+1}
-=
-X_i^n
-+
-\Delta t\,
-v_\psi
-\left(
-X_i^n+\frac{\Delta t}{2}K_1,
-t_n+\frac{\Delta t}{2}
-\right).
-```
-
-WebGL2 后景 tracer 使用 transform feedback 在两组状态 buffer 间交换。前景 tracer 使用同一公式的 Canvas2D 状态推进。禁止重新引入每粒子独立 phase、amplitude、center + orbit。
+`M` 根据 viewport 宽高独立缩放长期覆盖区域。后景 WebGL2 由 `gl_InstanceID` 和统一时间直接求值，前景 Canvas2D 使用同一公式。600 个 tracer 是同一条轨道在 180 秒窗口内的 600 个时间截面。
 
 ### 9.1 形态
 
-推荐：
+每个 tracer 是同一条 `γ` 上的一段真实短弧。使用 16 个历史采样点覆盖 `0.25–0.40 s`，逐段连接并使用圆头；不能根据瞬时速度替换成直 quad。
 
-- 形状：短线段 / 微光丝。
-- 长度：`4–14 px`。
-- 极少量长 tracer：`14–22 px`。
-- 线宽：`0.5–1.2 px`。
-- 圆头。
-- 不使用实心圆作为主体。
-- 不使用明显 bloom。
-- 不使用彩虹色。
-- 颜色跟随主题，但低饱和、低 alpha。
+明确可见的视觉参数：
+
+| 参数       | 日间                | 夜间                |
+| ---------- | ------------------- | ------------------- |
+| core width | `2.8–3.8 px`        | `2.5–3.5 px`        |
+| head       | `4–6 px`            | `4–6 px`            |
+| glow width | `8–12 px`           | `8–12 px`           |
+| core alpha | `0.65–0.85`         | `0.80–0.95`         |
+| glow alpha | `0.08–0.14`         | `0.14–0.22`         |
+| core color | `#315AA8 → #6846B8` | `#9FD8FF → #C4B5FD` |
+
+Core 使用正常 alpha blend；glow 单独一 pass 使用轻度 additive。
 
 建议 visual identity：
 
@@ -397,87 +360,50 @@ Normal：
 Field：
 
 ```text
-1920×1080:
-1200–2400 background tracer
-80–180 foreground tracer
+full quality:
+600 tracer
 ```
 
-高端设备可提升至：
+自适应降级只减少同时显示的时间截面数量：
 
 ```text
-3000–5000 background tracer
-150–300 foreground tracer
+quality ratio:
+1.00 → 0.68 → 0.55
 ```
 
-不要默认上万。
+不按 viewport 面积增加粒子，不提升到上千。
 
 ### 9.3 前后景比例
 
 ```text
-FieldBack  = 90%–95%
-FieldFront = 5%–10%
+FieldBack  = 510 / 600
+FieldFront = 90 / 600
 ```
 
 前景 tracer 必须：
 
 - 更稀；
-- 更短；
-- 更淡；
-- 生命周期更长；
-- 不连续从正文中央经过。
+- 与后景使用同一组连续 `τ_k`；
+- 与后景使用完全相同的 `γ` 和 viewport affine map；
+- 只通过图层和 alpha mask 区分。
 
-### 9.4 生命周期
+### 9.4 时间截面
 
-推荐：
+Tracer 没有独立生命周期和重生。`τ_k` 在 180 秒窗口内均匀排列，只允许小于相邻时间间距的确定性 jitter；性能档切换后继续使用同一个全局时间和同一组偏移。
 
-```text
-8–20 s
-```
+### 9.5 尾迹方向
 
-死亡后不要立即在原地重生。
-
-重生规则：
-
-1. alpha 先衰减。
-2. 在另一区域重置持久位置状态。
-3. 新 tracer 从 alpha 0 淡入。
-4. 不改变 global spectral phases。
-
-因此重生只是“观测窗口变化”，不是动力系统重置。
-
-### 9.5 朝向
-
-Tracer 朝向使用瞬时速度：
+方向来自相邻历史采样点：
 
 ```math
-v_j(t) \approx \frac{X_j(t)-X_j(t-\Delta t)}{\Delta t}.
+P_{k,\ell}(t)=X_k(t-\ell\Delta t).
 ```
 
-线段方向与 `v_j` 对齐。
-
-长度可随速度弱变化：
-
-```math
-L_j = L_0 + k \min(\lVert v_j\rVert,v_{\max}).
-```
-
-不要让长度和速度强绑定，否则局部会突然爆长。
+渲染器连接 `P_{k,0}, …, P_{k,15}`，所以每一段自然沿着 `γ` 的真实局部切向；不再单独计算 velocity，也不按速度拉伸尾迹。
 
 ### 9.6 alpha
 
-建议背景：
-
-```text
-0.03–0.14
-```
-
-前景：
-
-```text
-0.04–0.10
-```
-
-避免持续高亮。
+Core alpha 日间为 `0.65–0.85`、夜间为 `0.80–0.95`。Glow alpha 日间为 `0.08–0.14`、夜间为 `0.14–0.22`。DOM 遮罩和模式切换 alpha 在这两个基础值之上继续相乘。
 
 ---
 
@@ -622,31 +548,7 @@ Field Mode 中 Danmaku 不应该参与谱轨迹。
 
 停用独立 ripple RAF。
 
-点击不再画一个额外圆，而是改变附近 tracer 的 spectral phase。
-
-建议效果：
-
-```text
-click
-  ↓
-nearby tracers phase-shift
-  ↓
-局部轨迹短时间发生扭折
-  ↓
-仍继续沿同一 spectrum 演化
-```
-
-避免：
-
-- 爆炸粒子；
-- 强烈冲击波；
-- 颜色闪烁。
-
-Pointer move 只允许弱影响：
-
-- 轻微局部 phase bias；
-- 轻微 rotation；
-- 影响半径有限。
+点击和 Pointer move 都不修改 tracer。`γ`、`τ_k`、mode phase 与 viewport affine map 保持不变，避免交互把同一条轨道改造成位置相关动力系统。
 
 ---
 
@@ -659,9 +561,11 @@ Pointer move 只允许弱影响：
 正确方式是分两层：
 
 ```text
-analytic master spiral
+one analytic spectral orbit
     ↓
-screen embedding
+time translations
+    ↓
+viewport affine map
     ↓
 obstacle alpha mask
     ↓
@@ -670,7 +574,7 @@ render
 
 因此：
 
-- 数学位置由母螺旋与 fractional spectral deformation 解析生成；
+- 数学位置由 `X_k(t)=b+M(\Re z(t+τ_k),\Im z(t+τ_k))^T` 解析生成；
 - 卡片、播放器、Navbar 只改变可见性。
 
 ### 15.1 DOM 几何采样
@@ -700,7 +604,7 @@ render
 
 - FieldBack 穿组件时 alpha 只保留 `0.08–0.15`；
 - FieldFront 穿组件时 alpha 只保留 `0.55–0.70`；
-- 任何层都不能修改 `Γ(u,t)`。
+- 任何层都不能修改 `γ`、`τ_k`、`b` 或 `M`。
 
 ---
 
@@ -715,7 +619,7 @@ FieldFront 的存在只为了产生“页面有深度”的感觉。
 3. 不画 grass。
 4. 不画 firefly 群。
 5. Light 下最多允许极少量花瓣。
-6. 只允许同一母轨道上的弯曲 tracer 和极少量单体元素。
+6. 只允许同一条 `γ` 的时间平移短弧和极少量单体元素。
 7. 鼠标 hover 到正文区域时进一步降低 alpha。
 
 推荐：
@@ -794,8 +698,9 @@ DPR <= 1.25
 WebGL2
 60 FPS target
 DPR 1.0–1.5 dynamic
-500–900 tracer
-6–8 shared spectral modes
+600 tracer at full quality (510 back / 90 front)
+6 shared spectral modes
+16 trail samples over 0.25–0.40 s
 40 sakura OR 50 fireflies
 150 grass
 single render loop
@@ -822,7 +727,7 @@ Field Mode 的核心不是“更多动画”，而是：
 ```text
 same clock
 + same spectrum
-+ different observables
++ one tracer orbit with many time translations
 + different species dynamics
 + one renderer
 ```

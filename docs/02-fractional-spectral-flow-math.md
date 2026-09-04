@@ -364,178 +364,92 @@ p = 1.2–1.8
 
 不需要额外 clamp。
 
-屏幕映射可写成：
+长期覆盖区域也可直接由系数解释。写成：
 
 ```math
-X(t)
+c_j=r_je^{i\phi_j}.
+```
+
+当 `m_j = 2, 3, 5, 7, 11, 13` 具有不同的 square-free part 时，频率之间不存在非平凡整数线性关系。Kronecker 型稠密性说明相位向量在 `N` 维 torus 上稠密，因此轨道闭包是可旋转向量和形成的 annulus：
+
+```math
+r_-\le |z|\le r_+,
+\qquad
+r_+=\sum_jr_j,
+\qquad
+r_-=\max\left(2\max_jr_j-\sum_jr_j,0\right).
+```
+
+当前平缓 amplitude envelope 满足 `r_-=0`，所以长期轨道闭包覆盖整个圆盘，而不是收敛到大圆或 attractor。
+
+二维观测再复合 viewport affine map：
+
+```math
+\Gamma(t)
 =
-X_c
-+
-s
+b+M
 \begin{pmatrix}
 \Re z(t)\\
 \Im z(t)
 \end{pmatrix}.
 ```
 
-其中：
-
-- `X_c`：轨迹中心；
-- `s`：局部尺度。
+`M` 随 viewport 宽高独立缩放，使长期覆盖区域映射到整个绘图区；这仍然是 bounded linear observation 后的可逆 affine 变换，不改变轨道结构。
 
 ---
 
-## 10. Tracer 的当前母螺旋模型
+## 10. Tracer：同一条 fractional spectral orbit 的时间截面
 
-当前 tracer 不再积分二维速度场。整个 viewport 只有一条宏观母轨道：
+整个 tracer 系统只使用一条轨道：
 
 ```math
-\Gamma(u,t)
+\gamma(t)
 =
-C+r(u)e^{i\theta(u)}
-+\varepsilon_r\operatorname{Re}q(u,t)e_r
-+\varepsilon_\theta\operatorname{Im}q(u,t)e_\theta,
+\sum_{j=1}^{N}c_je^{i\beta m_j^{3/2}t}.
 ```
 
-其中：
-
-```math
-r(u)=r_{\min}+(r_{\max}-r_{\min})(1-u)^{0.82},
-\qquad
-\theta(u)=\theta_0+2\pi(2.15u+0.12u^2),
-```
-
-```math
-q(u,t)=
-\sum_{m\in\{2,3,5,7,11,13\}}
-a_m e^{i(2\pi mu-\beta m^{3/2}t+\phi_m)},
-\qquad a_m\propto m^{-1.3}.
-```
-
-`r_max = 0.65` 倍 viewport 对角线，`r_min = 0.035` 倍短边，中心为 `(0.50W,0.48H)`，径向和切向谱形变分别为最大半径的 3.8% 与 6.0%。
-
-第 `j` 个 tracer 解析采样：
-
-```math
-X_j(t)=\Gamma(u_j(t),t)+\delta_jN(u_j,t),
-\qquad |\delta_j|\le10\text{ px}.
-```
-
-12 个历史样本覆盖 0.25–0.45 秒并直接构成弯曲 trail。出生相位预填在完整生命周期中，因此进入 Field Mode 时无需等待累积即可看见整条螺旋。
-
-### 旧二维速度场模型说明
-
-以下第 10a–11a 节只保留旧方案推导，不再作为 tracer 实现约束；其中的二维谱场仍可供花瓣、萤火虫等次级元素参考。
-
-### 10a. Tracer 的全局谱场
-
-网站 tracer 不直接把二维线性观测 z(t) 当作每个粒子的坐标。它退后一层，成为全局复值谱场的时间结构：
+第 `k` 个 tracer 只是它的时间平移：
 
 ```math
 \boxed{
-\psi(x,t)
+X_k(t)
 =
-\sum_{m=1}^{M}
-c_m e^{i(k_m\cdot x-\lambda_m t+\phi_m)}
+b+M
+\begin{pmatrix}
+\Re\gamma(t+\tau_k)\\
+\Im\gamma(t+\tau_k)
+\end{pmatrix}
 }
 ```
 
-其中：
+等价地，每个 mode 的相位只能写成 `φ_j + λ_jτ_k`。不允许为粒子生成独立的 `φ_{j,k}`、amplitude、中心、lane 或速度尺度，否则会产生另一条轨道。
+
+当前全质量配置为 `600` 个 tracer、`T_cover = 180 s`：
 
 ```math
-\lambda_m=\beta |m|^{3/2}.
-```
-
-c_m、k_m、φ_m 对所有 tracer 共享，不允许出现带粒子下标的 φ_im 或 c_im。这样 Hilbert 空间中的 fractional unitary evolution 先生成 ψ，再由 ψ 生成屏幕上的流。
-
-定义：
-
-```math
-\operatorname{ReCurrent}
+\tau_k
 =
-\operatorname{Re}(\bar\psi\nabla\psi),
+\frac{k+1/2}{600}T_{\mathrm{cover}}
++\epsilon_k,
 ```
 
-```math
-\operatorname{PhaseCurrent}
-=
-\operatorname{Im}(\bar\psi\nabla\psi).
-```
+其中 `ε_k` 只允许是远小于相邻间距的确定性 time jitter。任意真实时刻，600 个时间截面同时显影同一条轨道在 180 秒窗口中的整体结构；后景使用 510 个截面，前景使用其后的 90 个截面。
 
-选用共同速度场：
+每根尾迹也必须从同一条 `γ` 解析采样：
 
 ```math
 \boxed{
-v_\psi(x,t)
+\operatorname{Trail}_k(t)
 =
-\frac{
-\operatorname{PhaseCurrent}
-+
-\mu\operatorname{ReCurrent}
-}{
-|\psi|^2+\varepsilon
-}
+\{X_k(t-s):0\le s\le\Delta_k\}
 }
 ```
 
-其中 ε 防止谱零点附近速度数值爆炸，μ 提供径向分量。
-
-在 ψ 的简单零点附近，旋转分量近似 r^{-1}e_θ，径向分量近似 μr^{-1}e_r。二者结合产生一边旋转、一边径向迁移的局部螺旋，而不是固定中心附近的自转。
+实现使用 16 个历史采样点，`Δ_k = 0.25–0.40 s`。尾迹是实际局部曲线，不是根据瞬时速度绘制的直 quad。
 
 ---
 
-## 11a. Tracer 状态与 RK2（已废弃）
-
-第 i 个 tracer 只保存：
-
-```text
-X_i = (x_i, y_i)
-age_i
-seed_i
-```
-
-seed 只用于初始位置、寿命、重生位置与视觉尺寸。所有 tracer 满足同一个方程：
-
-```math
-\dot X_i(t)=v_\psi(X_i(t),t).
-```
-
-离散推进使用 midpoint / RK2：
-
-```math
-K_1=v_\psi(X_i^n,t_n),
-```
-
-```math
-X_i^{n+1}
-=
-X_i^n
-+
-\Delta t\,
-v_\psi
-\left(
-X_i^n+\frac{\Delta t}{2}K_1,
-t_n+\frac{\Delta t}{2}
-\right).
-```
-
-Tracer 的方向直接取当前位置的共同场速度：
-
-```math
-\vartheta_i(t)
-=
-\operatorname{atan2}
-\left(
-v_{\psi,y}(X_i,t),
-v_{\psi,x}(X_i,t)
-\right).
-```
-
-长度只与速度弱绑定并保持上界。禁止使用 center + orbit 重新计算位置。
-
----
-
-## 12. Sakura 的轨迹
+## 11. Sakura 的轨迹
 
 花瓣不能完全做纯闭合谱 orbit，因为它必须持续下落。
 
@@ -590,7 +504,7 @@ y(t)\bmod H,
 
 ---
 
-## 13. Fireflies 的轨迹
+## 12. Fireflies 的轨迹
 
 萤火虫不需要线性 drift。
 
@@ -646,7 +560,7 @@ I_1
 
 ---
 
-## 14. Grass 的轨迹
+## 13. Grass 的轨迹
 
 Grass 不是平面位置轨迹，而是角度轨迹。
 
@@ -683,108 +597,50 @@ Ng = 3–4
 
 ---
 
-## 15. 同一谱场，不同物种耦合
+## 14. 同一谱场，不同物种耦合
 
-Tracer 共享完全相同的母轨道 `Γ`，只因出生相位和法向 lane 不同而位于同一条粒子河流的不同位置。
-
-花瓣、萤火虫与草仍保留自己的物种动力，但可以用不同耦合系数读取同一个场：
+Tracer 严格使用同一条 `γ`，差异只有时间平移 `τ_k`：
 
 ```math
 X_{\mathrm{tracer},j}
 =
-\Gamma(u_j,t)+\delta_jN(u_j,t),
+b+M
+\begin{pmatrix}
+\Re\gamma(t+\tau_j)\\
+\Im\gamma(t+\tau_j)
+\end{pmatrix}.
 ```
 
-```math
-\dot X_{\mathrm{firefly}}
-=
-0.7v_\psi+0.3u_{\mathrm{local}},
-```
-
-```math
-\dot X_{\mathrm{sakura}}
-=
-0.45v_\psi+g+w.
-```
-
-因此统一感来自共享 fractional clock。tracer 明确使用唯一母螺旋；花瓣、萤火虫和草仍保留各自物种动力并弱耦合旧二维谱场。
+花瓣、萤火虫与草保留第 11–13 节定义的物种动力，只共享 `λ_j = βm_j^{3/2}` 这组 fractional clock。它们不参与 tracer 的位置计算，也不能引入粒子私有谱相位。
 
 ---
 
-## 16. 点击交互：全局场的局部 phase impulse
+## 15. 点击交互
 
-Field Mode 下点击不添加独立粒子系统，也不修改某个 tracer 私有相位。
-
-对点击位置 p，在全局谱场相位中加入短时、局部、确定性的偏置：
-
-```math
-\theta_m(x,t)
-=
-k_m\cdot x-\lambda_m t+\phi_m
-+
-A_m
-\exp\left(
--\frac{\lVert x-p\rVert^2}{2\sigma^2}
-\right)
-\exp(-\kappa(t-t_0)).
-```
-
-附近所有 tracer 都读取同一个受扰形变项 `q(u,t)`。因此点击后母轨道局部发生短时谱形变，但频率、全局时钟和出生相位都不重置。
+Field Mode 下点击不添加独立粒子系统，也不修改 `γ`、`τ_k` 或任何 mode phase。Normal Mode 原有 ripple 保留，二者互不影响。
 
 ---
 
-## 17. Pointer move：弱 phase bias
+## 16. Pointer move
 
-鼠标移动只做小扰动：
-
-```math
-\phi_{q,j}(t)
-=
-\phi_{q,j}^{(0)}
-+
-\varepsilon
-w(d_q)
-g_j(p_t).
-```
-
-`ε` 必须很小。
-
-目标不是“粒子追鼠标”，而是鼠标附近的谱相位发生轻微偏移。
+Pointer move 不参与 tracer 数学链，避免把同一条时间平移轨道改成依赖屏幕位置的另一套动力系统。
 
 ---
 
-## 18. DOM obstacle：只改变 screen embedding
+## 17. DOM obstacle：只改变 alpha
 
-网页卡片不改变 `Γ`、`q` 或 tracer 的解析参数。当前实现只计算 alpha mask：FieldBack 穿组件时保留 `0.08–0.15`，FieldFront 保留 `0.55–0.70`，轨迹本身保持连续。
-
-定义 canonical particle state：
-
-```math
-Y_i(t)=X_i(t),
-\qquad
-\dot X_i=v_\psi(X_i,t).
-```
-
-最终屏幕位置：
-
-```math
-X_i^{\mathrm{screen}}(t)
-=
-W_\Omega(Y_i(t)).
-```
-
-W_Ω 是由 DOM 几何决定的 soft warp。
+网页卡片不改变 `γ`、`τ_k`、`b` 或 `M`。当前实现只根据 DOM 矩形计算 alpha mask：FieldBack 穿组件时保留约 `0.11`，FieldFront 按现有前景遮罩衰减，轨迹位置和尾迹采样始终连续。
 
 因此：
 
 ```text
-fractional spectral evolution
+one fractional spectral orbit
     ↓
-global ψ(x,t)
+time translations τ_k
     ↓
-shared particle advection
+viewport affine map
     ↓
-screen warp
+obstacle alpha mask
     ↓
 render
 ```
@@ -793,59 +649,7 @@ render
 
 ---
 
-## 19. Soft warp（已废弃）
-
-以下公式只保留旧方案推导。当前 tracer 不应用 `W_Ω`。
-
-对每个组件区域 `Ω_k`，设 signed distance：
-
-```math
-d_k(x).
-```
-
-外法向：
-
-```math
-n_k(x)
-=
-\nabla d_k(x).
-```
-
-定义局部偏折：
-
-```math
-W_\Omega(x)
-=
-x
-+
-\sum_k
-\rho_k(d_k(x))
-n_k(x).
-```
-
-例如：
-
-```math
-\rho_k(d)
-=
-a_k
-\exp
-\left(
--\frac{d^2}{\sigma_k^2}
-\right).
-```
-
-只在组件附近产生轻微偏折。
-
-注意：
-
-- 这不是碰撞模拟；
-- 不需要满足真实流体边界条件；
-- 它只是 screen-space embedding。
-
----
-
-## 20. 低性能档的数学降级
+## 18. 低性能档的数学降级
 
 Normal Mode 不需要抛弃这套模型。
 
@@ -871,7 +675,7 @@ Canvas2D
 
 ---
 
-## 21. 高性能档参数
+## 19. 高性能档参数
 
 推荐第一版：
 
@@ -901,7 +705,7 @@ grass modes:
 
 ---
 
-## 22. 防止高频过强
+## 20. 防止高频过强
 
 因为：
 
@@ -939,71 +743,27 @@ r_j
 
 ---
 
-## 23. WebGL2 解析式 instancing
+## 21. WebGL2 解析式 instancing
 
-当前后景 tracer 不保存位置状态。顶点着色器使用 `gl_InstanceID`、统一时间、确定性出生相位和 lane 参数，直接生成 `800 × 12 × 6` 量级的顶点；glow 与 core 各绘制一次。进入 Field Mode 时出生相位已经覆盖完整生命周期，因此不需要 warm-up。
+当前后景 tracer 不保存位置状态。顶点着色器使用 `gl_InstanceID`、统一时间和确定性 `τ_k`，直接计算 `γ(t+τ_k-s)`。全质量后景为 `510 × 15 × 6` 个三角形顶点，glow 与 core 各绘制一次。
 
-### 旧 transform feedback 方案（已废弃）
-
-后景 tracer 的位置是持久状态，不能由当前时间直接解析重算。
-
-使用两组 GPU buffer 保存：
-
-```text
-x, y, age, seed
-```
-
-每帧流程：
-
-```text
-state A
-  ↓ update shader + RK2
-state B
-  ↓ render shader
-instanced tracer quads
-  ↓ swap
-state B becomes next input
-```
-
-Update shader 只调用共享的 fieldVelocityAt，不读取每粒子 phase 或 amplitude。Render shader在当前位置再次读取同一速度场，以决定短光丝方向。
+进入 Field Mode 时 600 个 `τ_k` 已覆盖完整 `T_cover`，不需要 warm-up、位置 buffer 或积分更新。
 
 ---
 
-## 24. Variable dt
+## 22. Variable dt
 
-解析式 tracer 不依赖帧间 `Δt`，标签页恢复后直接按统一时钟采样。以下 RK2 约束只适用于仍采用积分更新的旧方案或次级元素。
-
-浏览器帧率不是严格固定。每帧使用实际 Δt，但对过大的间隔设上界，避免标签页恢复或卡顿后一帧跨越过远。
-
-RK2 的两个采样时刻必须是：
-
-```math
-t_n,
-\qquad
-t_n+\frac{\Delta t}{2}.
-```
-
-性能档切换时保持全局谱时间不变。粒子状态可以在 Field Mode 淡出后冻结；再次进入时从原状态继续，不能重新随机整组 buffer。
+解析式 tracer 不依赖帧间 `Δt`。每帧只从统一绝对时钟求值；标签页恢复或性能档切换后，直接在新的 `t` 上采样同一条 `γ`，无需追赶或恢复粒子状态。
 
 ---
 
-## 25. 生命周期与数值稳定
+## 23. 长期连续性与数值稳定
 
-当前 tracer 采用约 10 秒解析周期，周期首尾 alpha 淡入淡出；法向 lane 固定在 ±10 px，尾迹跨周期时直接截断，避免从内圈连到外圈。
-
-Tracer 生命周期推荐 12–28 秒。寿命结束时：
-
-1. alpha 完成淡出；
-2. seed 确定性推进；
-3. 在另一屏幕区域重置位置状态；
-4. age 归零并淡入；
-5. 全局 ψ、λ_m、c_m、k_m、φ_m 不变。
-
-谱零点附近通过 ε 正则化分母，并对最终速度设置平滑上界。屏幕边界使用 wrap，以维持粒子数并避免硬碰撞。
+Tracer 没有独立生命周期、重生、wrap 或位置重置。`τ_k` 固定，`γ` 是有限复指数和，始终有界；只需保持统一时间精度，并在计算当前启用 mode 的 amplitude sum 时防止除以零。
 
 ---
 
-## 26. 全局时间连续性
+## 24. 全局时间连续性
 
 切换性能档时必须保持：
 
@@ -1034,7 +794,7 @@ global spectral time
 
 ---
 
-## 27. 轨迹的几何解释
+## 25. 轨迹的几何解释
 
 有限 mode 情况下，定义：
 
@@ -1078,7 +838,7 @@ linear observation
 
 ---
 
-## 28. 为什么长期不会死
+## 26. 为什么长期不会死
 
 有三个原因。
 
@@ -1115,7 +875,7 @@ attractor
 
 ---
 
-## 29. 为什么不会太规则
+## 27. 为什么不会太规则
 
 若所有频率都有共同基本频率：
 
@@ -1137,75 +897,45 @@ attractor
 
 ---
 
-## 30. 推荐默认 tracer preset
+## 28. 推荐默认 tracer preset
 
 当前版本使用：
 
 ```text
-master spiral turns:
-2.15 + quadratic 0.12
-
-radius:
-0.65 × viewport diagonal → 0.035 × short side
-
-deformation:
-radial 3.8%, tangential 6.0%
-
 mode indices:
 [2, 3, 5, 7, 11, 13]
+
+amplitudes:
+[0.42, 0.36, 0.30, 0.25, 0.20, 0.16]
+
+beta:
+0.18
 
 active tracers:
-500–900, about 650 at 1920×1080
+600 at full quality
 
-front ratio:
-about 15%
+time coverage:
+180 s
+
+background / foreground:
+510 / 90
 
 trail:
-12 samples, 0.25–0.45 s
+16 samples, 0.25–0.40 s
 
-lane:
-±10 px
+day core / glow:
+2.8–3.8 px / 8–12 px
+
+night core / glow:
+2.5–3.5 px / 8–12 px
+
+head:
+4–6 px
 ```
-
-以下为旧速度场第一版参数（已废弃）：
-
-```text
-alpha = 1.5
-beta = 0.18
-
-mode indices:
-[2, 3, 5, 7, 11, 13]
-
-shared wave directions:
-[0.18, 1.35, 2.55, 3.58, 4.72, 5.68]
-
-wave-number scale:
-0.42
-
-radial mix μ:
-0.22
-
-regularizer ε:
-0.05
-
-flow speed:
-0.14
-
-persistent state:
-(x, y, age, seed)
-
-lifetime:
-12–28 s
-
-integrator:
-midpoint / RK2
-```
-
-这套参数的目标是产生少量缓慢迁移的谱涡旋，让大量 tracer 显示为共同流动，而不是增加粒子数量制造密度。
 
 ---
 
-## 31. 推荐默认 species preset
+## 29. 推荐默认 species preset
 
 ### Sakura
 
@@ -1237,107 +967,53 @@ high-frequency amplitude: low
 
 ```text
 modes: 2, 3, 5, 7, 11, 13
-spectral scale: variable
-foreground subset: sparse
+one shared orbit
+600 deterministic time translations over 180 s
+foreground subset: 90
 ```
 
 ---
 
-## 32. 最终核心公式
+## 30. 最终核心公式
 
-当前 tracer 动力链写成：
+Tracer 数学只保留三行：
 
 ```math
 \boxed{
-X_j(t)
+z(t)
 =
-\Gamma(u_j(t),t)
-+\delta_jN(u_j,t)
+\sum_j c_je^{i\beta m_j^{3/2}t}
 }
 ```
 
 ```math
 \boxed{
-\Gamma(u,t)
+X_k(t)
 =
-C+r(u)e^{i\theta(u)}
-+\varepsilon_r\operatorname{Re}q(u,t)e_r
-+\varepsilon_\theta\operatorname{Im}q(u,t)e_\theta
+b+M
+\begin{pmatrix}
+\Re z(t+\tau_k)\\
+\Im z(t+\tau_k)
+\end{pmatrix}
 }
 ```
 
 ```math
 \boxed{
-q(u,t)
+\operatorname{Trail}_k(t)
 =
-\sum_m a_m e^{i(2\pi mu-\beta m^{3/2}t+\phi_m)}
+\{X_k(t-s):0\le s\le\Delta\}
 }
 ```
 
-数学层级必须保持：
+600 个粒子不是 600 条曲线，而是同一条 fractional spectral orbit 上的 600 个时间截面。数学层级必须保持：
 
 ```text
-fractional spectral clock
+one fractional spectral orbit z(t)
     ↓
-one viewport-scale master spiral
+600 time translations z(t + τ_k)
     ↓
-analytic curved trail samples
-```
-
-### 旧速度场核心公式（已废弃）
-
-以下公式不再驱动 tracer，只作为旧方案和次级物种场的参考：
-
-```math
-\boxed{
-\psi_t
-=
-e^{-it(-\Delta)^{3/4}}\psi_0
-}
-```
-
-```math
-\boxed{
-v_\psi(x,t)
-=
-\frac{
-\operatorname{Im}(\bar\psi\nabla\psi)
-+
-\mu\operatorname{Re}(\bar\psi\nabla\psi)
-}{
-|\psi|^2+\varepsilon
-}
-}
-```
-
-```math
-\boxed{
-\dot X_i(t)=v_\psi(X_i(t),t)
-}
-```
-
-有限 mode 实现为：
-
-```math
-\boxed{
-\psi(x,t)
-=
-\sum_{m=1}^{M}
-c_m
-e^{i(k_m\cdot x-\beta |m|^{3/2}t+\phi_m)}
-}
-```
-
-数学层级必须保持：
-
-```text
-fractional unitary evolution
+viewport affine map
     ↓
-global spectral field
-    ↓
-shared velocity field
-    ↓
-particle advection
+true historical trail samples
 ```
-
-不得退回“每个粒子各自拥有一条 Fourier orbit”的实现。
