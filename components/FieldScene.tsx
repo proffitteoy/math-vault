@@ -90,6 +90,7 @@ uniform int uObstacleCount;
 out float vAlpha;
 out float vTheme;
 out float vShade;
+out float vAlong;
 out float vAcross;
 
 float hash11(float value) {
@@ -171,8 +172,13 @@ void main() {
   vec2 direction = normalize(velocity + vec2(0.0001));
   vec2 normal = vec2(-direction.y, direction.x);
   float speed = length(velocity);
-  float lengthPx = 4.0 + hash11(aMeta.x * 4.19) * 10.0 + 3.0 * speed / (1.0 + speed);
-  float widthPx = 0.65 + hash11(aMeta.x * 8.73) * 0.55;
+  float longTracer = step(0.94, hash11(aMeta.x * 9.91));
+  float lengthPx =
+    7.0 +
+    hash11(aMeta.x * 4.19) * 9.0 +
+    longTracer * 6.0 +
+    2.0 * speed / (1.0 + speed);
+  float widthPx = 1.15 + hash11(aMeta.x * 8.73) * 0.85;
   vec2 pixelToClip = vec2(2.0 / uResolution.x, 2.0 / uResolution.y);
   position +=
     (
@@ -182,9 +188,10 @@ void main() {
     pixelToClip;
 
   gl_Position = vec4(position, 0.0, 1.0);
-  vAlpha = mix(0.06, 0.14, hash11(aMeta.x * 6.41)) * fade * uAlpha * obstacleShade;
+  vAlpha = mix(0.16, 0.28, hash11(aMeta.x * 6.41)) * fade * uAlpha * obstacleShade;
   vTheme = uTheme;
   vShade = hash11(aMeta.x * 5.73);
+  vAlong = aMeta.y;
   vAcross = aMeta.z;
 }
 `
@@ -195,13 +202,17 @@ precision mediump float;
 in float vAlpha;
 in float vTheme;
 in float vShade;
+in float vAlong;
 in float vAcross;
 out vec4 outColor;
 
 void main() {
   vec3 daylight = mix(vec3(0.25, 0.36, 0.55), vec3(0.58, 0.40, 0.63), vShade);
   vec3 night = mix(vec3(0.55, 0.72, 0.96), vec3(0.72, 0.82, 1.0), vShade);
-  float edgeAlpha = 1.0 - smoothstep(0.72, 1.0, abs(vAcross));
+  float sideEdge = 1.0 - smoothstep(0.72, 1.0, abs(vAcross));
+  float capStart = smoothstep(0.76, 1.0, abs(vAlong));
+  float capEdge = 1.0 - smoothstep(0.82, 1.0, length(vec2(capStart, vAcross)));
+  float edgeAlpha = sideEdge * capEdge;
   outColor = vec4(mix(daylight, night, vTheme), vAlpha * edgeAlpha);
 }
 `
