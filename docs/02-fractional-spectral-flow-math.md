@@ -382,19 +382,25 @@ r_-=\max\left(2\max_jr_j-\sum_jr_j,0\right).
 
 当前平缓 amplitude envelope 满足 `r_-=0`，所以长期轨道闭包覆盖整个圆盘，而不是收敛到大圆或 attractor。
 
-二维观测再复合 viewport affine map：
+网站不把整个长期闭包直接映射到 viewport，而是先固定一个二维空间窗口：
 
 ```math
-\Gamma(t)
-=
-b+M
-\begin{pmatrix}
-\Re z(t)\\
-\Im z(t)
-\end{pmatrix}.
+Q=[x_0,x_1]\times[y_0,y_1]\subset\mathbb C.
 ```
 
-`M` 随 viewport 宽高独立缩放，使长期覆盖区域映射到整个绘图区；这仍然是 bounded linear observation 后的可逆 affine 变换，不改变轨道结构。
+窗口宽高比固定为 16:9。屏幕映射只使用一个统一尺度：
+
+```math
+S=1.04\min\left(\frac{W}{x_1-x_0},\frac{H}{y_1-y_0}\right),
+```
+
+```math
+X=\frac W2+S(x-x_c),
+\qquad
+Y=\frac H2-S(y-y_c).
+```
+
+因此圆弧不会被横向或纵向拉扁；`1.04` 只提供 4% overscan。
 
 ---
 
@@ -408,44 +414,55 @@ b+M
 \sum_{j=1}^{N}c_je^{i\beta m_j^{3/2}t}.
 ```
 
-第 `k` 个 tracer 只是它的时间平移：
+离线在 `t∈[0,600]` 上采样 100,000 个点，并按网格覆盖率、独立弧段数、窗口内弧长和集中度搜索 crop。固定结果为：
 
 ```math
-\boxed{
-X_k(t)
-=
-b+M
-\begin{pmatrix}
-\Re\gamma(t+\tau_k)\\
-\Im\gamma(t+\tau_k)
-\end{pmatrix}
-}
+Q=[-0.595426,0.134689]\times[-1.229504,-0.818815].
 ```
 
-等价地，每个 mode 的相位只能写成 `φ_j + λ_jτ_k`。不允许为粒子生成独立的 `φ_{j,k}`、amplitude、中心、lane 或速度尺度，否则会产生另一条轨道。
-
-当前全质量配置为 `600` 个 tracer、`T_cover = 180 s`：
+该窗口覆盖全部 `12×7` 网格，并把可见时间集合分解成 73 个区间：
 
 ```math
-\tau_k
+\mathcal I
 =
-\frac{k+1/2}{600}T_{\mathrm{cover}}
-+\epsilon_k,
+\{t:z(t)\in Q\}
+=
+I_1\cup\cdots\cup I_{73}.
 ```
 
-其中 `ε_k` 只允许是远小于相邻间距的确定性 time jitter。任意真实时刻，600 个时间截面同时显影同一条轨道在 180 秒窗口中的整体结构；后景使用 510 个截面，前景使用其后的 90 个截面。
+这些区间总长约为 `14.1243`。每一个 `I_r=[a_r,b_r]` 都对应画面中的一条连续弧。
+
+初始化先为每个区间保留一个 tracer；其余 tracer 从这些区间按长度加权采样初始时间：
+
+```math
+\Pr(I_r)=\frac{b_r-a_r}{\sum_q(b_q-a_q)},
+\qquad
+\tau_k\sim\operatorname{Uniform}(a_r,b_r).
+```
+
+真实时间记为 `s`，播放速度固定为：
+
+```math
+\boxed{t_k(s)=\tau_k+0.025s.}
+```
+
+等价地，每个 mode 的相位只能写成 `φ_j+λ_jt_k(s)`。不允许为粒子生成独立的 `φ_{j,k}`、amplitude、中心或速度尺度，否则会产生另一条轨道。
+
+当前全质量目标为 600 个可见 tracer，调度容量为 1200；后景使用 510 个，前景使用 90 个。所有 tracer 在第一帧已经分布于 `\mathcal I`，无需等待轨迹生成。
+
+当 `t_k` 超出当前 `I_r` 时，不 clamp 或反弹。该 tracer 用 `0.2–0.4 s` 淡出，随后从另一个按长度加权的可见区间重新采样 `τ_k`，并用 `0.4–0.8 s` 淡入。
 
 每根尾迹也必须从同一条 `γ` 解析采样：
 
 ```math
 \boxed{
-\operatorname{Trail}_k(t)
+P_{k,\ell}
 =
-\{X_k(t-s):0\le s\le\Delta_k\}
+z(t_k-\ell\delta t)
 }
 ```
 
-实现使用 16 个历史采样点，`Δ_k = 0.25–0.40 s`。尾迹是实际局部曲线，不是根据瞬时速度绘制的直 quad。
+实现使用 12 个历史采样点，理论时间跨度为 `0.10–0.18`。尾迹是真实 fractional spectral curve，不是根据瞬时速度绘制的直线。网站只绘制这些短 trail，不额外绘制完整长期轨道。
 
 ---
 
@@ -599,16 +616,14 @@ Ng = 3–4
 
 ## 14. 同一谱场，不同物种耦合
 
-Tracer 严格使用同一条 `γ`，差异只有时间平移 `τ_k`：
+Tracer 严格使用同一条 `γ`，差异只有可见区间内的时间位置 `t_k`：
 
 ```math
 X_{\mathrm{tracer},j}
 =
-b+M
-\begin{pmatrix}
-\Re\gamma(t+\tau_j)\\
-\Im\gamma(t+\tau_j)
-\end{pmatrix}.
+\operatorname{ViewportMap}_Q\!\left(\gamma(t_j)\right),
+\qquad
+\gamma(t_j)\in Q.
 ```
 
 花瓣、萤火虫与草保留第 11–13 节定义的物种动力，只共享 `λ_j = βm_j^{3/2}` 这组 fractional clock。它们不参与 tracer 的位置计算，也不能引入粒子私有谱相位。
@@ -617,7 +632,7 @@ b+M
 
 ## 15. 点击交互
 
-Field Mode 下点击不添加独立粒子系统，也不修改 `γ`、`τ_k` 或任何 mode phase。Normal Mode 原有 ripple 保留，二者互不影响。
+Field Mode 下点击不添加独立粒子系统，也不修改 `γ`、`Q`、`t_k` 或任何 mode phase。Normal Mode 原有 ripple 保留，二者互不影响。
 
 ---
 
@@ -629,16 +644,18 @@ Pointer move 不参与 tracer 数学链，避免把同一条时间平移轨道�
 
 ## 17. DOM obstacle：只改变 alpha
 
-网页卡片不改变 `γ`、`τ_k`、`b` 或 `M`。当前实现只根据 DOM 矩形计算 alpha mask：FieldBack 穿组件时保留约 `0.11`，FieldFront 按现有前景遮罩衰减，轨迹位置和尾迹采样始终连续。
+网页卡片不改变 `γ`、`Q`、可见区间或 `t_k`。当前实现只根据 DOM 矩形计算 alpha mask：FieldBack 乘 `0.20`，FieldFront 乘 `0.72`，轨迹位置和尾迹采样始终连续。
 
 因此：
 
 ```text
 one fractional spectral orbit
     ↓
-time translations τ_k
+fixed spatial crop Q
     ↓
-viewport affine map
+visible interval scheduling
+    ↓
+uniform viewport scale
     ↓
 obstacle alpha mask
     ↓
@@ -683,13 +700,13 @@ Canvas2D
 alpha = 1.5
 
 mode indices:
-[2, 3, 5, 7, 11, 13, 17, 19]
+[2, 3, 5, 7, 11, 13]
 
 beta:
-0.12–0.25
+0.18
 
 tracer modes:
-6–8
+6
 
 firefly modes:
 3–5
@@ -745,21 +762,21 @@ r_j
 
 ## 21. WebGL2 解析式 instancing
 
-当前后景 tracer 不保存位置状态。顶点着色器使用 `gl_InstanceID`、统一时间和确定性 `τ_k`，直接计算 `γ(t+τ_k-s)`。全质量后景为 `510 × 15 × 6` 个三角形顶点，glow 与 core 各绘制一次。
+当前后景 tracer 只保存调度状态 `(t_k, alpha)`，不保存二维位置。CPU 每帧以 `0.025Δs` 推进 `t_k` 并处理可见区间的淡入淡出；顶点着色器直接计算 `γ(t_k-ℓδt)` 和固定 crop 映射。
 
-进入 Field Mode 时 600 个 `τ_k` 已覆盖完整 `T_cover`，不需要 warm-up、位置 buffer 或积分更新。
+全质量后景为 `510 × 11 × 6` 个三角形顶点，glow 与 core 各绘制一次。进入 Field Mode 时 600 个 `t_k` 已按可见区间长度分布，不需要 warm-up 或二维位置积分。
 
 ---
 
 ## 22. Variable dt
 
-解析式 tracer 不依赖帧间 `Δt`。每帧只从统一绝对时钟求值；标签页恢复或性能档切换后，直接在新的 `t` 上采样同一条 `γ`，无需追赶或恢复粒子状态。
+帧间 `Δs` 只用于推进 `t_k←t_k+0.025Δs` 和淡化计时，不参与轨道形状或尾迹长度。对异常大的帧间隔设上界，避免标签页恢复时跨过多个短可见区间。
 
 ---
 
 ## 23. 长期连续性与数值稳定
 
-Tracer 没有独立生命周期、重生、wrap 或位置重置。`τ_k` 固定，`γ` 是有限复指数和，始终有界；只需保持统一时间精度，并在计算当前启用 mode 的 amplitude sum 时防止除以零。
+`γ`、`Q` 和 73 个可见区间始终固定。Tracer 离开 crop 后只重采样轨道时间，不生成新轨道参数；调度 seed 确定性推进，保证同一次运行中没有随机跳模。轨道是有限复指数和，本身始终有界。
 
 ---
 
@@ -914,23 +931,36 @@ beta:
 active tracers:
 600 at full quality
 
-time coverage:
-180 s
+capacity:
+1200
+
+crop search:
+100,000 samples over t = 0–600
+
+crop Q:
+x = [-0.595426, 0.134689]
+y = [-1.229504, -0.818815]
+
+visible intervals:
+73, total theoretical duration 14.1243
+
+playback speed:
+0.025
 
 background / foreground:
 510 / 90
 
 trail:
-16 samples, 0.25–0.40 s
+12 samples, theoretical time 0.10–0.18
 
 day core / glow:
-2.8–3.8 px / 8–12 px
+1.5–2.2 px / 3.5–5.5 px
 
 night core / glow:
-2.5–3.5 px / 8–12 px
+1.4–2.0 px / 4–6 px
 
-head:
-4–6 px
+bright tracer:
+2.4–3.0 px day / 2.2–2.8 px night
 ```
 
 ---
@@ -968,7 +998,8 @@ high-frequency amplitude: low
 ```text
 modes: 2, 3, 5, 7, 11, 13
 one shared orbit
-600 deterministic time translations over 180 s
+600 scheduled time positions across 73 visible intervals
+playback speed: 0.025
 foreground subset: 90
 ```
 
@@ -976,7 +1007,7 @@ foreground subset: 90
 
 ## 30. 最终核心公式
 
-Tracer 数学只保留三行：
+Tracer 数学与观察链压缩为：
 
 ```math
 \boxed{
@@ -988,32 +1019,40 @@ z(t)
 
 ```math
 \boxed{
-X_k(t)
-=
-b+M
-\begin{pmatrix}
-\Re z(t+\tau_k)\\
-\Im z(t+\tau_k)
-\end{pmatrix}
+Q
+\subset
+\mathbb C
 }
 ```
 
 ```math
 \boxed{
-\operatorname{Trail}_k(t)
-=
-\{X_k(t-s):0\le s\le\Delta\}
+z(t_k)
+\in
+Q
 }
 ```
 
-600 个粒子不是 600 条曲线，而是同一条 fractional spectral orbit 上的 600 个时间截面。数学层级必须保持：
+```math
+\boxed{
+t_k(s)
+=
+\tau_k+0.025s
+}
+```
+
+600 个粒子不是 600 条曲线，而是同一条 fractional spectral orbit 在固定空间窗口中的 600 个时间截面。数学层级必须保持：
 
 ```text
 one fractional spectral orbit z(t)
     ↓
-600 time translations z(t + τ_k)
+fixed spatial crop Q
     ↓
-viewport affine map
+73 visible time intervals
     ↓
-true historical trail samples
+600 slow time translations t_k(s)
+    ↓
+uniform viewport scale
+    ↓
+true historical trail samples only
 ```

@@ -249,7 +249,7 @@ Math.random()
 推荐基础 mode indices：
 
 ```text
-2, 3, 5, 7, 11, 13, 17, 19
+2, 3, 5, 7, 11, 13
 ```
 
 使用 fractional spectral law：
@@ -264,7 +264,7 @@ Tracer 直接使用同一个二维线性观测轨道：
 \gamma(t)=\sum_jc_je^{i\beta m_j^{3/2}t}.
 ```
 
-第 `k` 个 tracer 只取 `γ(t+τ_k)`。seed 只能决定小幅 time jitter、亮度、尾迹时长和视觉尺寸；不能生成粒子私有 phase、amplitude、center、lane 或速度尺度。
+第 `k` 个 tracer 只取 `γ(t_k)`。seed 只能决定它从哪个可见时间区间开始、亮度、尾迹时长和视觉尺寸；不能生成粒子私有 phase、amplitude、center、lane 或速度尺度。
 
 花瓣、萤火虫与草可按各自惯性和物种运动逐步耦合这个场；它们不能反过来让 tracer 退化为独立的 Fourier orbit。
 
@@ -273,11 +273,13 @@ fractional spectrum
     ↓
 one orbit γ(t)
     ↓
-shared time translations τ_k
+fixed spatial crop Q
     ↓
-viewport affine map
+visible time intervals {I_r}
     ↓
-historical trail samples
+slow time translations t_k(s)
+    ↓
+uniform viewport scale
 ```
 
 ---
@@ -294,44 +296,57 @@ Tracer 是 Field Mode 的主视觉，不是“粒子点”。
 z(t)=\sum_jc_je^{i\beta m_j^{3/2}t}.
 ```
 
-当前 mode、amplitude 和时间平移为：
+当前 mode 与 amplitude 为：
 
 ```text
 modes       = [2, 3, 5, 7, 11, 13]
 amplitudes  = [0.42, 0.36, 0.30, 0.25, 0.20, 0.16]
 beta        = 0.18
-tracers     = 600
-Tcover      = 180 s
+search time = 0–600
+samples     = 100,000
 ```
 
-屏幕位置只做二维 affine map：
+离线搜索固定一个 16:9 空间窗口：
+
+```text
+Q.x = [-0.595426,  0.134689]
+Q.y = [-1.229504, -0.818815]
+```
+
+该窗口在 `12 × 7` 网格上的覆盖率为 100%，包含 73 个独立可见时间区间，总可见理论时长约 `14.1243`。窗口固定，不在运行时随机改变。
+
+屏幕位置使用统一 scale，不做非等比拉伸：
 
 ```math
-X_k(t)=b+M
-\begin{pmatrix}
-\Re z(t+\tau_k)\\
-\Im z(t+\tau_k)
-\end{pmatrix}.
+S=1.04\min\left(\frac{W}{x_1-x_0},\frac{H}{y_1-y_0}\right),
 ```
 
-`M` 根据 viewport 宽高独立缩放长期覆盖区域。后景 WebGL2 由 `gl_InstanceID` 和统一时间直接求值，前景 Canvas2D 使用同一公式。600 个 tracer 是同一条轨道在 180 秒窗口内的 600 个时间截面。
+```math
+X=\frac W2+S(x-x_c),
+\qquad
+Y=\frac H2-S(y-y_c).
+```
+
+`1.04` 提供 4% overscan，使弧线自然从屏幕外穿入穿出。后景 WebGL2 与前景 Canvas2D 必须使用同一组 crop 常量和同一个变换。
 
 ### 9.1 形态
 
-每个 tracer 是同一条 `γ` 上的一段真实短弧。使用 16 个历史采样点覆盖 `0.25–0.40 s`，逐段连接并使用圆头；不能根据瞬时速度替换成直 quad。
+每个 tracer 是同一条 `γ` 上的一段真实短弧。使用 12 个历史采样点覆盖理论时间 `0.10–0.18`，逐段连接并使用圆头；不能根据瞬时速度替换成直 quad，也不能额外绘制完整长期曲线。
 
 明确可见的视觉参数：
 
-| 参数       | 日间                | 夜间                |
-| ---------- | ------------------- | ------------------- |
-| core width | `2.8–3.8 px`        | `2.5–3.5 px`        |
-| head       | `4–6 px`            | `4–6 px`            |
-| glow width | `8–12 px`           | `8–12 px`           |
-| core alpha | `0.65–0.85`         | `0.80–0.95`         |
-| glow alpha | `0.08–0.14`         | `0.14–0.22`         |
-| core color | `#315AA8 → #6846B8` | `#9FD8FF → #C4B5FD` |
+| 参数          | 日间         | 夜间           |
+| ------------- | ------------ | -------------- |
+| core width    | `1.5–2.2 px` | `1.4–2.0 px`   |
+| bright tracer | `2.4–3.0 px` | `2.2–2.8 px`   |
+| glow width    | `3.5–5.5 px` | `4–6 px`       |
+| core alpha    | `0.38–0.58`  | `0.48–0.68`    |
+| glow alpha    | `0.04–0.08`  | `0.07–0.12`    |
+| palette       | 三档固定蓝色 | 三档固定冷蓝紫 |
 
 Core 使用正常 alpha blend；glow 单独一 pass 使用轻度 additive。
+
+颜色分布固定为约 80% 普通蓝、15% 稍亮、5% 高亮，不为每根 tracer 生成紫蓝渐变。
 
 建议 visual identity：
 
@@ -349,8 +364,6 @@ Core 使用正常 alpha blend；glow 单独一 pass 使用轻度 additive。
 
 ### 9.2 数量
 
-建议按 viewport 面积动态取值。
-
 Normal：
 
 ```text
@@ -361,7 +374,8 @@ Field：
 
 ```text
 full quality:
-600 tracer
+visible target = 600 tracer
+capacity       = 1200 tracer
 ```
 
 自适应降级只减少同时显示的时间截面数量：
@@ -371,7 +385,7 @@ quality ratio:
 1.00 → 0.68 → 0.55
 ```
 
-不按 viewport 面积增加粒子，不提升到上千。
+全质量目标允许在 `500–800` 内调节，当前固定为 600；容量只用于调度缓冲，不代表同时绘制 1200 个 tracer。
 
 ### 9.3 前后景比例
 
@@ -387,23 +401,35 @@ FieldFront = 90 / 600
 - 与后景使用完全相同的 `γ` 和 viewport affine map；
 - 只通过图层和 alpha mask 区分。
 
-### 9.4 时间截面
+### 9.4 可见区间调度
 
-Tracer 没有独立生命周期和重生。`τ_k` 在 180 秒窗口内均匀排列，只允许小于相邻时间间距的确定性 jitter；性能档切换后继续使用同一个全局时间和同一组偏移。
+可见集合预计算为：
+
+```math
+\mathcal I=\{t:z(t)\in Q\}=I_1\cup\cdots\cup I_{73}.
+```
+
+初始化先为 73 个区间各保留一个 tracer，其余 tracer 再按区间长度选择 `I_r`，并在区间内均匀选择 `τ_k`。因此第一帧明确覆盖全部长期可见弧段，同时整体密度仍近似与弧段理论时长成正比。真实时间 `s` 与理论时间的关系固定为：
+
+```math
+t_k(s)=\tau_k+0.025s.
+```
+
+当 tracer 离开当前区间后，先用 `0.2–0.4 s` 淡出，再从另一个按长度加权的可见区间重新采样，并用 `0.4–0.8 s` 淡入。不 clamp、不反弹、不修改轨道。
 
 ### 9.5 尾迹方向
 
 方向来自相邻历史采样点：
 
 ```math
-P_{k,\ell}(t)=X_k(t-\ell\Delta t).
+P_{k,\ell}=z(t_k-\ell\delta t).
 ```
 
-渲染器连接 `P_{k,0}, …, P_{k,15}`，所以每一段自然沿着 `γ` 的真实局部切向；不再单独计算 velocity，也不按速度拉伸尾迹。
+渲染器连接 12 个历史点，理论时间跨度为 `0.10–0.18`。每一段自然沿着 `γ` 的真实局部切向；不再单独计算 velocity，也不按现实帧间时间拉伸尾迹。
 
 ### 9.6 alpha
 
-Core alpha 日间为 `0.65–0.85`、夜间为 `0.80–0.95`。Glow alpha 日间为 `0.08–0.14`、夜间为 `0.14–0.22`。DOM 遮罩和模式切换 alpha 在这两个基础值之上继续相乘。
+Core alpha 日间为 `0.38–0.58`、夜间为 `0.48–0.68`。Glow alpha 日间为 `0.04–0.08`、夜间为 `0.07–0.12`。DOM 遮罩、区间出入淡化和模式切换 alpha 在这些基础值之上继续相乘。
 
 ---
 
@@ -563,9 +589,11 @@ Field Mode 中 Danmaku 不应该参与谱轨迹。
 ```text
 one analytic spectral orbit
     ↓
-time translations
+fixed spatial crop Q
     ↓
-viewport affine map
+visible interval scheduling
+    ↓
+uniform viewport scale
     ↓
 obstacle alpha mask
     ↓
@@ -574,7 +602,7 @@ render
 
 因此：
 
-- 数学位置由 `X_k(t)=b+M(\Re z(t+τ_k),\Im z(t+τ_k))^T` 解析生成；
+- 数学位置由 `z(t_k)∈Q` 与统一 viewport scale 解析生成；
 - 卡片、播放器、Navbar 只改变可见性。
 
 ### 15.1 DOM 几何采样
@@ -602,9 +630,9 @@ render
 
 建议：
 
-- FieldBack 穿组件时 alpha 只保留 `0.08–0.15`；
-- FieldFront 穿组件时 alpha 只保留 `0.55–0.70`；
-- 任何层都不能修改 `γ`、`τ_k`、`b` 或 `M`。
+- FieldBack 穿组件时乘 `0.15–0.25`，当前取 `0.20`；
+- FieldFront 穿组件时乘 `0.65–0.80`，当前取 `0.72`；
+- 任何层都不能修改 `γ`、`Q`、可见区间或 `t_k`。
 
 ---
 
@@ -626,9 +654,9 @@ FieldFront 的存在只为了产生“页面有深度”的感觉。
 
 ```text
 background tracer: normal alpha
-foreground tracer over empty area: 0.08
-foreground tracer over card: 0.03–0.05
-foreground tracer over text: 0–0.03
+background tracer over card: alpha × 0.20
+foreground tracer over empty area: normal alpha
+foreground tracer over card: alpha × 0.72
 ```
 
 ---
@@ -660,23 +688,11 @@ Dark → Light 反向。
 
 ```text
 components/
-  FieldScene/
-    FieldScene.tsx
-    FieldBack.tsx
-    FieldFront.tsx
-    fieldClock.ts
-    fieldConfig.ts
-    spectralCore.ts
-    obstacleMap.ts
-    pointerInput.ts
-    species/
-      sakura.ts
-      fireflies.ts
-      grass.ts
-      tracers.ts
+  FieldScene.tsx                shared clock + species + interactions
+  field/
+    SpectralTracerLayer.tsx     scheduling + WebGL/Canvas trail rendering
+    spectralOrbit.ts            orbit + crop + viewport map + visible intervals
 ```
-
-如果暂时不拆目录，也至少应在逻辑上保持这些模块边界。
 
 ---
 
@@ -699,8 +715,10 @@ WebGL2
 60 FPS target
 DPR 1.0–1.5 dynamic
 600 tracer at full quality (510 back / 90 front)
+1200 scheduling capacity
 6 shared spectral modes
-16 trail samples over 0.25–0.40 s
+playback speed = 0.025
+12 trail samples over theoretical time 0.10–0.18
 40 sakura OR 50 fireflies
 150 grass
 single render loop
@@ -712,7 +730,7 @@ single render loop
 1. 减少 FieldFront
 2. 减少 tracer 数量
 3. 降 DPR
-4. 减少 spectral modes
+4. 减少 species spectral modes；tracer 始终保留 6 个 mode
 5. 60 → 45 → 30 FPS
 ```
 

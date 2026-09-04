@@ -4,27 +4,26 @@ import { useEffect, useRef } from "react"
 import { siteConfig } from "../siteConfig"
 import { useFieldMode } from "./FieldModeProvider"
 import { useTheme } from "./ThemeProvider"
+import {
+  SPECTRAL_TRACER_FOREGROUND,
+  SPECTRAL_TRACER_MAX_OBSTACLES,
+  SPECTRAL_TRACER_TARGET,
+  SpectralTracerLayer,
+  createSpectralTracerController,
+  type TracerObstacle,
+} from "./field/SpectralTracerLayer"
+import { ORBIT_LAMBDAS } from "./field/spectralOrbit"
 
 const TAU = Math.PI * 2
 const PHI = (1 + Math.sqrt(5)) / 2
 const NORMAL_FRAME_MS = 1000 / 30
 const NORMAL_PIXEL_RATIO = 1.25
-const FIELD_BETA = 0.18
-const MODE_INDICES = [2, 3, 5, 7, 11, 13] as const
-const LAMBDAS = MODE_INDICES.map((mode) => FIELD_BETA * Math.pow(mode, 1.5))
-const FIELD_MODE_PHASES = [0.31, 2.17, 4.02, 5.41, 1.24, 3.52] as const
-const ORBIT_AMPLITUDES = [0.42, 0.36, 0.3, 0.25, 0.2, 0.16] as const
-const FIELD_TRACER_COUNT = 600
-const TRACER_COVER_SECONDS = 180
-const TRAIL_SAMPLES = 16
-const TRAIL_SEGMENTS = TRAIL_SAMPLES - 1
-const MAX_OBSTACLES = 8
+const LAMBDAS = ORBIT_LAMBDAS
 const EFFECT_COUNTS = {
   sakura: 40,
   fireflies: 50,
   grass: 150,
   danmaku: 15,
-  foregroundTracer: 90,
 } as const
 
 type Spectrum = {
@@ -33,27 +32,12 @@ type Spectrum = {
   sinPhases: number[]
 }
 
-type Obstacle = {
-  left: number
-  top: number
-  right: number
-  bottom: number
-}
-
 type Ripple = {
   x: number
   y: number
   radius: number
   opacity: number
   velocity: number
-}
-
-type OrbitTracer = {
-  seed: number
-  timeJitter: number
-  brightness: number
-  trailDuration: number
-  widthScale: number
 }
 
 type FieldQuality = {
@@ -65,160 +49,19 @@ type FieldQuality = {
 }
 
 const FIELD_QUALITY: FieldQuality[] = [
-  { foregroundCount: 90, tracerRatio: 1, pixelRatio: 1.5, modeCount: 6, frameMs: 1000 / 60 },
+  {
+    foregroundCount: SPECTRAL_TRACER_FOREGROUND,
+    tracerRatio: 1,
+    pixelRatio: 1.5,
+    modeCount: 6,
+    frameMs: 1000 / 60,
+  },
   { foregroundCount: 48, tracerRatio: 1, pixelRatio: 1.5, modeCount: 6, frameMs: 1000 / 60 },
   { foregroundCount: 48, tracerRatio: 0.68, pixelRatio: 1.5, modeCount: 6, frameMs: 1000 / 60 },
   { foregroundCount: 48, tracerRatio: 0.68, pixelRatio: 1, modeCount: 6, frameMs: 1000 / 60 },
   { foregroundCount: 48, tracerRatio: 0.68, pixelRatio: 1, modeCount: 4, frameMs: 1000 / 45 },
   { foregroundCount: 32, tracerRatio: 0.55, pixelRatio: 1, modeCount: 4, frameMs: 1000 / 30 },
 ]
-
-const SPECTRAL_ORBIT_GLSL = String.raw`
-uniform float uTime;
-uniform float uModeCount;
-uniform float uLambda[6];
-uniform vec2 uResolution;
-uniform float uTracerCount;
-
-const float MODE_AMPLITUDES[6] = float[6](0.42, 0.36, 0.30, 0.25, 0.20, 0.16);
-const float MODE_PHASES[6] = float[6](0.31, 2.17, 4.02, 5.41, 1.24, 3.52);
-
-float hash11(float value) {
-  return fract(sin(value * 127.1) * 43758.5453123);
-}
-
-vec2 spectralOrbit(float time) {
-  vec2 value = vec2(0.0);
-  float amplitudeSum = 0.0;
-
-  for (int index = 0; index < 6; index++) {
-    if (float(index) >= uModeCount) {
-      continue;
-    }
-    float amplitude = MODE_AMPLITUDES[index];
-    float theta = uLambda[index] * time + MODE_PHASES[index];
-    value += amplitude * vec2(cos(theta), sin(theta));
-    amplitudeSum += amplitude;
-  }
-  return value / max(amplitudeSum, 0.0001);
-}
-
-vec2 orbitPoint(float time) {
-  vec2 normalized = spectralOrbit(time);
-  return vec2(
-    (0.5 + 0.5 * normalized.x) * uResolution.x,
-    (0.5 - 0.5 * normalized.y) * uResolution.y
-  );
-}
-`
-
-const RENDER_VERTEX_SHADER = String.raw`#version 300 es
-precision highp float;
-
-uniform float uAlpha;
-uniform float uTheme;
-uniform vec4 uObstacles[8];
-uniform int uObstacleCount;
-uniform float uPass;
-
-${SPECTRAL_ORBIT_GLSL}
-
-out float vAlpha;
-out float vTheme;
-out float vShade;
-
-void main() {
-  float seed = float(gl_InstanceID + 1);
-  float spacing = ${TRACER_COVER_SECONDS}.0 / max(uTracerCount, 1.0);
-  float timeOffset =
-    ((seed - 0.5) / max(uTracerCount, 1.0)) * ${TRACER_COVER_SECONDS}.0 +
-    (hash11(seed * 4.17 + 2.3) - 0.5) * spacing * 0.35;
-  float trailDuration = mix(0.25, 0.40, hash11(seed * 7.13 + 1.9));
-  int segment = gl_VertexID / 6;
-  int corner = gl_VertexID - segment * 6;
-  float segmentStart = float(segment) / float(${TRAIL_SEGMENTS});
-  float segmentEnd = float(segment + 1) / float(${TRAIL_SEGMENTS});
-  float startTime = uTime + timeOffset - segmentStart * trailDuration;
-  float endTime = uTime + timeOffset - segmentEnd * trailDuration;
-  vec2 start = orbitPoint(startTime);
-  vec2 end = orbitPoint(endTime);
-  bool useStart = corner == 0 || corner == 3 || corner == 5;
-  float side = corner == 0 || corner == 1 || corner == 3 ? -1.0 : 1.0;
-  vec2 position = useStart ? start : end;
-  vec2 direction = normalize(start - end + vec2(0.0001));
-  vec2 normal = vec2(-direction.y, direction.x);
-  float coreWidth = mix(
-    mix(2.8, 3.8, hash11(seed * 8.73)),
-    mix(2.5, 3.5, hash11(seed * 8.73)),
-    uTheme
-  );
-  float glowWidth = mix(8.0, 12.0, hash11(seed * 9.91));
-  float width = mix(coreWidth, glowWidth, uPass);
-  if (segment == 0 && useStart && uPass < 0.5) {
-    width = mix(4.0, 6.0, hash11(seed * 3.57));
-  }
-  position += normal * side * width * 0.5;
-  float obstacleShade = 1.0;
-
-  for (int index = 0; index < 8; index++) {
-    if (index >= uObstacleCount) {
-      break;
-    }
-    vec4 obstacle = uObstacles[index];
-    bool inside =
-      position.x > obstacle.x &&
-      position.x < obstacle.z &&
-      position.y > obstacle.y &&
-      position.y < obstacle.w;
-    obstacleShade *= inside ? 0.11 : 1.0;
-  }
-
-  float flowAlpha = pow(1.0 - segmentStart, 1.25);
-  float brightness = hash11(seed * 6.41);
-  float coreAlpha = mix(
-    mix(0.65, 0.85, brightness),
-    mix(0.80, 0.95, brightness),
-    uTheme
-  );
-  float glowAlpha = mix(
-    mix(0.08, 0.14, brightness),
-    mix(0.14, 0.22, brightness),
-    uTheme
-  );
-  float passAlpha = mix(
-    coreAlpha,
-    glowAlpha,
-    uPass
-  );
-  vec2 clip = vec2(
-    position.x * 2.0 / uResolution.x - 1.0,
-    1.0 - position.y * 2.0 / uResolution.y
-  );
-  gl_Position = vec4(clip, 0.0, 1.0);
-  vAlpha =
-    passAlpha *
-    flowAlpha *
-    uAlpha *
-    obstacleShade;
-  vTheme = uTheme;
-  vShade = hash11(seed * 5.73);
-}
-`
-
-const FRAGMENT_SHADER = String.raw`#version 300 es
-precision mediump float;
-
-in float vAlpha;
-in float vTheme;
-in float vShade;
-out vec4 outColor;
-
-void main() {
-  vec3 daylight = mix(vec3(0.192, 0.353, 0.659), vec3(0.408, 0.275, 0.722), vShade);
-  vec3 night = mix(vec3(0.624, 0.847, 1.0), vec3(0.769, 0.710, 0.992), vShade);
-  outColor = vec4(mix(daylight, night, vTheme), vAlpha);
-}
-`
 function hash(index: number, seed: number) {
   const value = Math.sin(index * 12.9898 + seed * 78.233) * 43758.5453
   return value - Math.floor(value)
@@ -237,33 +80,6 @@ function smoothstep(value: number) {
   return bounded * bounded * (3 - 2 * bounded)
 }
 
-function createOrbitTracer(seed: number): OrbitTracer {
-  return {
-    seed,
-    timeJitter: hash(seed, 7) - 0.5,
-    brightness: 0.84 + hash(seed, 10) * 0.16,
-    trailDuration: 0.25 + hash(seed, 11) * 0.15,
-    widthScale: 0.88 + hash(seed, 12) * 0.24,
-  }
-}
-
-function sampleOrbitPoint(time: number, width: number, height: number, modeCount: number) {
-  let real = 0
-  let imaginary = 0
-  let amplitudeSum = 0
-  for (let mode = 0; mode < Math.min(modeCount, MODE_INDICES.length); mode++) {
-    const amplitude = ORBIT_AMPLITUDES[mode]
-    const theta = LAMBDAS[mode] * time + FIELD_MODE_PHASES[mode]
-    real += amplitude * Math.cos(theta)
-    imaginary += amplitude * Math.sin(theta)
-    amplitudeSum += amplitude
-  }
-  const scale = Math.max(amplitudeSum, 0.0001)
-  return {
-    x: (0.5 + 0.5 * (real / scale)) * width,
-    y: (0.5 - 0.5 * (imaginary / scale)) * height,
-  }
-}
 function sideWeightedPosition(index: number, seed: number) {
   const position = hash(index, seed)
   const edgePosition =
@@ -339,195 +155,6 @@ function createFireflySprite() {
   context.fillStyle = glow
   context.fillRect(0, 0, size, size)
   return sprite
-}
-
-function createShader(
-  gl: WebGL2RenderingContext,
-  type: typeof gl.VERTEX_SHADER | typeof gl.FRAGMENT_SHADER,
-  source: string,
-) {
-  const shader = gl.createShader(type)
-  if (!shader) return null
-  gl.shaderSource(shader, source)
-  gl.compileShader(shader)
-  if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
-    console.warn("Field shader compilation failed:", gl.getShaderInfoLog(shader))
-    gl.deleteShader(shader)
-    return null
-  }
-  return shader
-}
-
-function createProgram(gl: WebGL2RenderingContext, vertexSource: string, fragmentSource: string) {
-  const vertexShader = createShader(gl, gl.VERTEX_SHADER, vertexSource)
-  const fragmentShader = createShader(gl, gl.FRAGMENT_SHADER, fragmentSource)
-  if (!vertexShader || !fragmentShader) {
-    if (vertexShader) gl.deleteShader(vertexShader)
-    if (fragmentShader) gl.deleteShader(fragmentShader)
-    return null
-  }
-
-  const program = gl.createProgram()
-  if (!program) {
-    gl.deleteShader(vertexShader)
-    gl.deleteShader(fragmentShader)
-    return null
-  }
-  gl.attachShader(program, vertexShader)
-  gl.attachShader(program, fragmentShader)
-  gl.linkProgram(program)
-  gl.deleteShader(vertexShader)
-  gl.deleteShader(fragmentShader)
-
-  if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
-    console.warn("Field program linking failed:", gl.getProgramInfoLog(program))
-    gl.deleteProgram(program)
-    return null
-  }
-  return program
-}
-
-function createFieldRenderer(canvas: HTMLCanvasElement) {
-  const gl = canvas.getContext("webgl2", {
-    alpha: true,
-    antialias: true,
-    depth: false,
-    powerPreference: "high-performance",
-    premultipliedAlpha: false,
-  })
-  if (!gl) return null
-
-  const renderProgram = createProgram(gl, RENDER_VERTEX_SHADER, FRAGMENT_SHADER)
-  const vertexArray = gl.createVertexArray()
-  if (!renderProgram || !vertexArray) {
-    if (renderProgram) gl.deleteProgram(renderProgram)
-    if (vertexArray) gl.deleteVertexArray(vertexArray)
-    return null
-  }
-
-  gl.bindVertexArray(null)
-
-  const renderUniforms = {
-    time: gl.getUniformLocation(renderProgram, "uTime"),
-    alpha: gl.getUniformLocation(renderProgram, "uAlpha"),
-    theme: gl.getUniformLocation(renderProgram, "uTheme"),
-    modeCount: gl.getUniformLocation(renderProgram, "uModeCount"),
-    resolution: gl.getUniformLocation(renderProgram, "uResolution"),
-    tracerCount: gl.getUniformLocation(renderProgram, "uTracerCount"),
-    lambda: gl.getUniformLocation(renderProgram, "uLambda[0]"),
-    obstacles: gl.getUniformLocation(renderProgram, "uObstacles[0]"),
-    obstacleCount: gl.getUniformLocation(renderProgram, "uObstacleCount"),
-    pass: gl.getUniformLocation(renderProgram, "uPass"),
-  }
-
-  gl.enable(gl.BLEND)
-
-  const resize = (width: number, height: number, pixelRatio: number) => {
-    canvas.width = Math.max(1, Math.floor(width * pixelRatio))
-    canvas.height = Math.max(1, Math.floor(height * pixelRatio))
-    canvas.style.width = width + "px"
-    canvas.style.height = height + "px"
-    gl.viewport(0, 0, canvas.width, canvas.height)
-  }
-
-  const setOrbitUniforms = (
-    time: number,
-    modeCount: number,
-    width: number,
-    height: number,
-    tracerCount: number,
-  ) => {
-    gl.uniform1f(renderUniforms.time, time)
-    gl.uniform1f(renderUniforms.modeCount, modeCount)
-    gl.uniform1f(renderUniforms.tracerCount, tracerCount)
-    gl.uniform1fv(renderUniforms.lambda, LAMBDAS)
-    gl.uniform2f(renderUniforms.resolution, width, height)
-  }
-
-  const render = ({
-    time,
-    alpha,
-    theme,
-    modeCount,
-    tracerCount,
-    totalTracerCount,
-    width,
-    height,
-    obstacles,
-  }: {
-    time: number
-    alpha: number
-    theme: number
-    modeCount: number
-    tracerCount: number
-    totalTracerCount: number
-    width: number
-    height: number
-    obstacles: Obstacle[]
-  }) => {
-    gl.clearColor(0, 0, 0, 0)
-    gl.clear(gl.COLOR_BUFFER_BIT)
-
-    const activeCount = Math.min(tracerCount, FIELD_TRACER_COUNT)
-    if (alpha <= 0.001 || activeCount <= 0) return
-
-    const obstacleData = new Float32Array(MAX_OBSTACLES * 4)
-    obstacles.slice(0, MAX_OBSTACLES).forEach((obstacle, index) => {
-      obstacleData.set([obstacle.left, obstacle.top, obstacle.right, obstacle.bottom], index * 4)
-    })
-
-    gl.useProgram(renderProgram)
-    setOrbitUniforms(time, modeCount, width, height, totalTracerCount)
-    gl.uniform1f(renderUniforms.alpha, alpha)
-    gl.uniform1f(renderUniforms.theme, theme)
-    gl.uniform4fv(renderUniforms.obstacles, obstacleData)
-    gl.uniform1i(renderUniforms.obstacleCount, Math.min(obstacles.length, MAX_OBSTACLES))
-    gl.bindVertexArray(vertexArray)
-    gl.blendFunc(gl.SRC_ALPHA, gl.ONE)
-    gl.uniform1f(renderUniforms.pass, 1)
-    gl.drawArraysInstanced(gl.TRIANGLES, 0, TRAIL_SEGMENTS * 6, activeCount)
-    gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA)
-    gl.uniform1f(renderUniforms.pass, 0)
-    gl.drawArraysInstanced(gl.TRIANGLES, 0, TRAIL_SEGMENTS * 6, activeCount)
-    gl.bindVertexArray(null)
-  }
-
-  const destroy = () => {
-    gl.deleteVertexArray(vertexArray)
-    gl.deleteProgram(renderProgram)
-    gl.getExtension("WEBGL_lose_context")?.loseContext()
-  }
-
-  return { resize, render, destroy }
-}
-function pointShade(x: number, y: number, obstacles: Obstacle[]) {
-  for (const obstacle of obstacles) {
-    if (x >= obstacle.left && x <= obstacle.right && y >= obstacle.top && y <= obstacle.bottom) {
-      return 0.62
-    }
-  }
-  return 1
-}
-
-function tracerColor(shade: number, theme: number) {
-  const palettes = [
-    [
-      [49, 90, 168],
-      [104, 70, 184],
-    ],
-    [
-      [159, 216, 255],
-      [196, 181, 253],
-    ],
-  ]
-  const samplePalette = (palette: number[][]) => {
-    return palette[0].map((channel, index) =>
-      Math.round(channel + (palette[1][index] - channel) * shade),
-    )
-  }
-  const daylight = samplePalette(palettes[0])
-  const night = samplePalette(palettes[1])
-  return daylight.map((channel, index) => Math.round(channel + (night[index] - channel) * theme))
 }
 
 export default function FieldScene() {
@@ -611,9 +238,6 @@ export default function FieldScene() {
         spectrum: createSpectrum(index, 303, 3, x * TAU * 2.2),
       }
     })
-    const foregroundTracers = Array.from({ length: EFFECT_COUNTS.foregroundTracer }, (_, index) =>
-      createOrbitTracer(index + 10001),
-    )
     const danmaku = siteConfig.danmakuList.length
       ? Array.from({ length: EFFECT_COUNTS.danmaku }, (_, index) => ({
           text: siteConfig.danmakuList[Math.floor(hash(index, 1) * siteConfig.danmakuList.length)],
@@ -626,9 +250,9 @@ export default function FieldScene() {
     const desktopQuery = window.matchMedia("(min-width: 768px)")
     const reducedMotionQuery = window.matchMedia("(prefers-reduced-motion: reduce)")
     const ripples: Ripple[] = []
-    let obstacles: Obstacle[] = []
+    let obstacles: TracerObstacle[] = []
     let lastObstacleSample = -1000
-    let fieldRenderer: ReturnType<typeof createFieldRenderer> = null
+    let tracerController: ReturnType<typeof createSpectralTracerController> = null
     let width = 0
     let height = 0
     let animationFrame = 0
@@ -663,7 +287,7 @@ export default function FieldScene() {
       )
       resize2dCanvas(speciesCanvas, speciesContext, normalRatio)
       resize2dCanvas(frontCanvas, frontContext, fieldRatio)
-      fieldRenderer?.resize(width, height, fieldRatio)
+      tracerController?.resize(width, height, fieldRatio)
       lastObstacleSample = -1000
     }
 
@@ -681,7 +305,7 @@ export default function FieldScene() {
             rect.right > 0 &&
             rect.left < width,
         )
-        .slice(0, MAX_OBSTACLES)
+        .slice(0, SPECTRAL_TRACER_MAX_OBSTACLES)
         .map((rect) => ({
           left: rect.left,
           top: rect.top,
@@ -830,96 +454,7 @@ export default function FieldScene() {
       speciesContext.globalAlpha = 1
     }
 
-    const drawFront = (
-      time: number,
-      quality: FieldQuality,
-      backgroundCount: number,
-      totalTracerCount: number,
-    ) => {
-      frontContext.clearRect(0, 0, width, height)
-
-      const frontAlpha = smoothstep((fieldBlend - 0.58) / 0.42)
-      if (frontAlpha > 0.001) {
-        frontContext.lineCap = "round"
-        const trails: Array<{
-          tracer: OrbitTracer
-          points: Array<{ x: number; y: number }>
-          color: number[]
-          alpha: number
-        }> = []
-        const foregroundCount = Math.min(
-          quality.foregroundCount,
-          Math.max(0, totalTracerCount - backgroundCount),
-        )
-        const timeSpacing = TRACER_COVER_SECONDS / Math.max(totalTracerCount, 1)
-        for (let index = 0; index < foregroundCount; index++) {
-          const tracer = foregroundTracers[index]
-          const points = []
-          const globalIndex = backgroundCount + index
-          const timeOffset =
-            ((globalIndex + 0.5) / Math.max(totalTracerCount, 1)) * TRACER_COVER_SECONDS +
-            tracer.timeJitter * timeSpacing * 0.35
-          for (let sample = 0; sample < TRAIL_SAMPLES; sample++) {
-            points.push(
-              sampleOrbitPoint(
-                time + timeOffset - (sample / TRAIL_SEGMENTS) * tracer.trailDuration,
-                width,
-                height,
-                quality.modeCount,
-              ),
-            )
-          }
-          const head = points[0]
-          trails.push({
-            tracer,
-            points,
-            color: tracerColor(hash(tracer.seed, 13), themeBlend),
-            alpha: frontAlpha * pointShade(head.x, head.y, obstacles),
-          })
-        }
-
-        const drawTrails = (glow: boolean) => {
-          frontContext.globalCompositeOperation = glow ? "lighter" : "source-over"
-          for (const { tracer, points, color, alpha } of trails) {
-            const width =
-              (glow
-                ? 8 + hash(tracer.seed, 14) * 4
-                : (2.8 + hash(tracer.seed, 15)) * (1 - themeBlend) +
-                  (2.5 + hash(tracer.seed, 15)) * themeBlend) * tracer.widthScale
-            for (let segment = 0; segment < points.length - 1; segment++) {
-              const flowAlpha = Math.pow(1 - segment / TRAIL_SEGMENTS, 1.25)
-              const brightness = (tracer.brightness - 0.84) / 0.16
-              const passAlpha = glow
-                ? (0.08 + brightness * 0.06) * (1 - themeBlend) +
-                  (0.14 + brightness * 0.08) * themeBlend
-                : (0.65 + brightness * 0.2) * (1 - themeBlend) +
-                  (0.8 + brightness * 0.15) * themeBlend
-              frontContext.globalAlpha = alpha * flowAlpha * passAlpha
-              frontContext.strokeStyle = "rgb(" + color[0] + ", " + color[1] + ", " + color[2] + ")"
-              frontContext.lineWidth = width
-              frontContext.beginPath()
-              frontContext.moveTo(points[segment].x, points[segment].y)
-              frontContext.lineTo(points[segment + 1].x, points[segment + 1].y)
-              frontContext.stroke()
-            }
-            if (!glow) {
-              const brightness = (tracer.brightness - 0.84) / 0.16
-              const headWidth = 4 + hash(tracer.seed, 16) * 2
-              frontContext.globalAlpha =
-                alpha *
-                ((0.65 + brightness * 0.2) * (1 - themeBlend) +
-                  (0.8 + brightness * 0.15) * themeBlend)
-              frontContext.fillStyle = "rgb(" + color[0] + ", " + color[1] + ", " + color[2] + ")"
-              frontContext.beginPath()
-              frontContext.arc(points[0].x, points[0].y, headWidth * 0.5, 0, TAU)
-              frontContext.fill()
-            }
-          }
-        }
-
-        drawTrails(true)
-        drawTrails(false)
-      }
+    const drawInteractions = () => {
       frontContext.globalCompositeOperation = "source-over"
       for (let index = ripples.length - 1; index >= 0; index--) {
         const ripple = ripples[index]
@@ -970,44 +505,32 @@ export default function FieldScene() {
       sampleObstacles(now)
       drawSpecies(time, cosines, sines, quality.modeCount)
 
-      const totalTracerCount = Math.round(FIELD_TRACER_COUNT * quality.tracerRatio)
+      const totalTracerCount = Math.round(SPECTRAL_TRACER_TARGET * quality.tracerRatio)
       const foregroundCount = Math.min(quality.foregroundCount, totalTracerCount)
-      const tracerCount = Math.max(0, totalTracerCount - foregroundCount)
-      if (fieldBlend > 0.001) {
-        if (!fieldRenderer) {
-          fieldRenderer = createFieldRenderer(fieldCanvas)
-          fieldRenderer?.resize(
-            width,
-            height,
-            Math.min(window.devicePixelRatio || 1, quality.pixelRatio),
-          )
-        }
-        fieldRenderer?.render({
-          time,
+      if (fieldBlend > 0.001 && !tracerController) {
+        tracerController = createSpectralTracerController(fieldCanvas, frontCanvas)
+        tracerController?.resize(
+          width,
+          height,
+          Math.min(window.devicePixelRatio || 1, quality.pixelRatio),
+        )
+      }
+      if (tracerController) {
+        tracerController.render({
+          deltaSeconds,
           alpha: smoothstep(fieldBlend),
           theme: themeBlend,
-          modeCount: quality.modeCount,
-          tracerCount,
-          totalTracerCount,
+          totalCount: totalTracerCount,
+          foregroundCount,
           width,
           height,
           obstacles,
         })
       } else {
-        fieldRenderer?.render({
-          time,
-          alpha: 0,
-          theme: themeBlend,
-          modeCount: quality.modeCount,
-          tracerCount: 0,
-          totalTracerCount,
-          width,
-          height,
-          obstacles,
-        })
+        frontContext.clearRect(0, 0, width, height)
       }
 
-      drawFront(time, quality, tracerCount, totalTracerCount)
+      drawInteractions()
 
       if (modeRef.current === "field" && !reducedMotionQuery.matches) {
         frameCount += 1
@@ -1092,7 +615,7 @@ export default function FieldScene() {
 
     return () => {
       stopAnimation()
-      fieldRenderer?.destroy()
+      tracerController?.destroy()
       window.removeEventListener("resize", handleResize)
       window.removeEventListener("scroll", handleScroll)
       window.removeEventListener("click", handleClick)
@@ -1110,18 +633,7 @@ export default function FieldScene() {
         data-field-layer="species"
         aria-hidden="true"
       />
-      <canvas
-        ref={fieldCanvasRef}
-        className="pointer-events-none fixed inset-0 z-[3] hidden h-full w-full md:block"
-        data-field-layer="back"
-        aria-hidden="true"
-      />
-      <canvas
-        ref={frontCanvasRef}
-        className="pointer-events-none fixed inset-0 z-20 hidden h-full w-full md:block"
-        data-field-layer="front"
-        aria-hidden="true"
-      />
+      <SpectralTracerLayer backCanvasRef={fieldCanvasRef} frontCanvasRef={frontCanvasRef} />
     </>
   )
 }
