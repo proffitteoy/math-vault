@@ -174,11 +174,11 @@ void main() {
   float speed = length(velocity);
   float longTracer = step(0.94, hash11(aMeta.x * 9.91));
   float lengthPx =
-    7.0 +
-    hash11(aMeta.x * 4.19) * 9.0 +
+    11.0 +
+    hash11(aMeta.x * 4.19) * 11.0 +
     longTracer * 6.0 +
     2.0 * speed / (1.0 + speed);
-  float widthPx = 1.15 + hash11(aMeta.x * 8.73) * 0.85;
+  float widthPx = 1.4 + hash11(aMeta.x * 8.73);
   vec2 pixelToClip = vec2(2.0 / uResolution.x, 2.0 / uResolution.y);
   position +=
     (
@@ -188,7 +188,7 @@ void main() {
     pixelToClip;
 
   gl_Position = vec4(position, 0.0, 1.0);
-  vAlpha = mix(0.16, 0.28, hash11(aMeta.x * 6.41)) * fade * uAlpha * obstacleShade;
+  vAlpha = mix(0.32, 0.52, hash11(aMeta.x * 6.41)) * fade * uAlpha * obstacleShade;
   vTheme = uTheme;
   vShade = hash11(aMeta.x * 5.73);
   vAlong = aMeta.y;
@@ -207,11 +207,11 @@ in float vAcross;
 out vec4 outColor;
 
 void main() {
-  vec3 daylight = mix(vec3(0.25, 0.36, 0.55), vec3(0.58, 0.40, 0.63), vShade);
-  vec3 night = mix(vec3(0.55, 0.72, 0.96), vec3(0.72, 0.82, 1.0), vShade);
-  float sideEdge = 1.0 - smoothstep(0.72, 1.0, abs(vAcross));
+  vec3 daylight = mix(vec3(0.10, 0.20, 0.36), vec3(0.38, 0.20, 0.44), vShade);
+  vec3 night = mix(vec3(0.62, 0.78, 1.0), vec3(0.84, 0.90, 1.0), vShade);
+  float sideEdge = 1.0 - smoothstep(0.88, 1.0, abs(vAcross));
   float capStart = smoothstep(0.76, 1.0, abs(vAlong));
-  float capEdge = 1.0 - smoothstep(0.82, 1.0, length(vec2(capStart, vAcross)));
+  float capEdge = 1.0 - smoothstep(0.92, 1.0, length(vec2(capStart, vAcross)));
   float edgeAlpha = sideEdge * capEdge;
   outColor = vec4(mix(daylight, night, vTheme), vAlpha * edgeAlpha);
 }
@@ -540,7 +540,7 @@ function createFieldRenderer(canvas: HTMLCanvasElement) {
 function pointShade(x: number, y: number, obstacles: Obstacle[]) {
   for (const obstacle of obstacles) {
     if (x >= obstacle.left && x <= obstacle.right && y >= obstacle.top && y <= obstacle.bottom) {
-      return 0.25
+      return 0.55
     }
   }
   return 1
@@ -633,8 +633,8 @@ export default function FieldScene() {
         centerX: sideWeightedPosition(index, 401),
         centerY: 0.06 + hash(index, 402) * 0.88,
         scale: 28 + hash(index, 403) * 96,
-        length: 4 + hash(index, 404) * 8,
-        opacity: 0.04 + hash(index, 405) * 0.06,
+        length: 11 + hash(index, 404) * 13,
+        opacity: 0.14 + hash(index, 405) * 0.1,
         lifetime: 8 + hash(index, 406) * 12,
         offset: hash(index, 407) * 20,
         spectrum: createSpectrum(index, 408, 6),
@@ -864,7 +864,7 @@ export default function FieldScene() {
       const frontAlpha = smoothstep((fieldBlend - 0.58) / 0.42)
       if (frontAlpha > 0.001) {
         frontContext.lineCap = "round"
-        frontContext.strokeStyle = themeBlend > 0.5 ? "rgb(190, 214, 255)" : "rgb(82, 94, 139)"
+        frontContext.strokeStyle = themeBlend > 0.5 ? "rgb(218, 232, 255)" : "rgb(48, 63, 112)"
 
         for (let index = 0; index < quality.foregroundCount; index++) {
           const tracer = foregroundTracers[index]
@@ -902,7 +902,7 @@ export default function FieldScene() {
           const shade = pointShade(x, y, obstacles)
 
           frontContext.globalAlpha = tracer.opacity * fade * frontAlpha * shade
-          frontContext.lineWidth = 0.6 + hash(index, 411) * 0.55
+          frontContext.lineWidth = 1 + hash(index, 411) * 0.7
           frontContext.beginPath()
           frontContext.moveTo(x - directionX * length * 0.5, y - directionY * length * 0.5)
           frontContext.lineTo(x + directionX * length * 0.5, y + directionY * length * 0.5)
