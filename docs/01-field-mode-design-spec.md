@@ -142,9 +142,9 @@ Normal Mode 的原则是：**稳定、廉价、不改变现有视觉语言。**
 | Grass                    | 开    | 开   | 由共享 spectrum 的局部相位驱动           |
 | Danmaku                  | 弱化  | 弱化 | opacity 降低 30%–50%，避免与 tracer 竞争 |
 | Tracer                   | 开    | 开   | Field Mode 主体                          |
-| FieldFront               | 开    | 开   | 只画 5%–10% tracer                       |
+| FieldFront               | 开    | 开   | 只画约 15% tracer                        |
 | ClickEffect              | 替换  | 替换 | 改为 spectral phase impulse              |
-| DOM obstacle interaction | 开    | 开   | 使用 soft warp，不做硬碰撞               |
+| DOM obstacle interaction | 开    | 开   | 只衰减 alpha，不改变母轨道               |
 
 ---
 
@@ -258,18 +258,18 @@ Math.random()
 \lambda_m = \beta m^{3/2}.
 ```
 
-Tracer 不再为每个粒子生成独立系数、相位和局部轨道。应先由全局共享的 `c_m`、`k_m`、`φ_m` 构造谱场 `ψ(x,t)`，再由同一个速度场 `v_ψ(x,t)` 输运所有 tracer。seed 只用于初始化位置、寿命、重生位置和视觉尺寸。
+Tracer 不再让二维速度场决定宏观方向。所有 tracer 共享唯一的跨屏母螺旋 `Γ(u,t)`，fractional spectrum 只负责对母轨道做小幅形变。seed 只决定出生相位、法向 lane、速度、亮度、尾迹时长和视觉尺寸。
 
 花瓣、萤火虫与草可按各自惯性和物种运动逐步耦合这个场；它们不能反过来让 tracer 退化为独立的 Fourier orbit。
 
 ```text
 fractional spectrum
     ↓
-global ψ(x,t)
+shared deformation q(u,t)
     ↓
-shared vψ(x,t)
+one master spiral Γ(u,t)
     ↓
-persistent tracer states
+analytic tracer samples
 ```
 
 ---
@@ -278,7 +278,33 @@ persistent tracer states
 
 Tracer 是 Field Mode 的主视觉，不是“粒子点”。
 
-### 9.0 全局谱场输运
+### 9.0 当前实现：唯一母螺旋
+
+所有 tracer 共享一条覆盖整个 viewport 的解析曲线：
+
+```math
+z_0(u)=r(u)e^{i\theta(u)},\quad
+r(u)=r_{\min}+(r_{\max}-r_{\min})(1-u)^{0.82},
+\quad
+\theta(u)=\theta_0+2\pi(2.15u+0.12u^2).
+```
+
+`r_max = 0.65 × viewport diagonal`，`r_min = 0.035 × min(width, height)`，中心位于 `(0.50W, 0.48H)`。fractional spectrum 只作为 3.8% 径向、6.0% 切向形变：
+
+```math
+q(u,t)=
+\sum_{m\in\{2,3,5,7,11,13\}}
+a_m e^{i(2\pi mu-\beta m^{3/2}t+\phi_m)},
+\qquad a_m\propto m^{-1.3}.
+```
+
+每个 tracer 解析采样 `X_j(t)=Γ(u_j(t),t)+δ_jN(u_j,t)`，其中 `|δ_j|≤10 px`。后景 WebGL2 由 `gl_InstanceID` 和时间直接生成位置；前景 Canvas2D 使用同一公式。不保存位置 buffer，不运行 RK2 或 transform feedback。
+
+默认 1920×1080 约 650 个 tracer，最高 900；前后景约 85%/15%。每条尾迹用 12 个样本覆盖 0.25–0.45 秒，core 为 1.8–3.2 px、head 为 3.5–5 px、glow 为 6–10 px。障碍物只衰减 alpha，不能改变 `Γ`。
+
+### 9.0a 旧速度场方案（已废弃）
+
+以下 9.0a–9.6 仅保留旧方案的推导记录，不再作为当前 tracer 的实现约束。
 
 定义整个平面共享的复值谱场：
 
@@ -633,19 +659,19 @@ Pointer move 只允许弱影响：
 正确方式是分两层：
 
 ```text
-canonical particle advection
+analytic master spiral
     ↓
 screen embedding
     ↓
-soft obstacle warp
+obstacle alpha mask
     ↓
 render
 ```
 
 因此：
 
-- 数学速度场仍然由 fractional spectral flow 生成，粒子轨迹是该场的积分曲线；
-- 卡片、播放器、Navbar 只改变屏幕映射。
+- 数学位置由母螺旋与 fractional spectral deformation 解析生成；
+- 卡片、播放器、Navbar 只改变可见性。
 
 ### 15.1 DOM 几何采样
 
@@ -662,19 +688,19 @@ render
 
 不要逐帧调用 `getBoundingClientRect()`。
 
-### 15.2 Soft obstacle
+### 15.2 Obstacle alpha mask
 
-组件附近只做轻度偏折。
+组件不能偏折轨迹，只能改变透明度。
 
 目标不是“粒子撞墙”，而是：
 
-> 轨迹在玻璃卡片附近看起来略微绕开或减弱。
+> 同一条轨迹连续穿过页面，但在玻璃卡片后方显著减弱。
 
 建议：
 
-- 中央正文区域偏折更强；
-- 卡片边缘允许少量 tracer 穿过；
-- FieldFront tracer 不做硬避障，只降低 alpha。
+- FieldBack 穿组件时 alpha 只保留 `0.08–0.15`；
+- FieldFront 穿组件时 alpha 只保留 `0.55–0.70`；
+- 任何层都不能修改 `Γ(u,t)`。
 
 ---
 
@@ -689,7 +715,7 @@ FieldFront 的存在只为了产生“页面有深度”的感觉。
 3. 不画 grass。
 4. 不画 firefly 群。
 5. Light 下最多允许极少量花瓣。
-6. 只允许短 tracer 和极少量单体元素。
+6. 只允许同一母轨道上的弯曲 tracer 和极少量单体元素。
 7. 鼠标 hover 到正文区域时进一步降低 alpha。
 
 推荐：
@@ -768,7 +794,7 @@ DPR <= 1.25
 WebGL2
 60 FPS target
 DPR 1.0–1.5 dynamic
-1200–5000 tracer
+500–900 tracer
 6–8 shared spectral modes
 40 sakura OR 50 fireflies
 150 grass

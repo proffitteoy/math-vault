@@ -385,7 +385,49 @@ s
 
 ---
 
-## 10. Tracer 的全局谱场
+## 10. Tracer 的当前母螺旋模型
+
+当前 tracer 不再积分二维速度场。整个 viewport 只有一条宏观母轨道：
+
+```math
+\Gamma(u,t)
+=
+C+r(u)e^{i\theta(u)}
++\varepsilon_r\operatorname{Re}q(u,t)e_r
++\varepsilon_\theta\operatorname{Im}q(u,t)e_\theta,
+```
+
+其中：
+
+```math
+r(u)=r_{\min}+(r_{\max}-r_{\min})(1-u)^{0.82},
+\qquad
+\theta(u)=\theta_0+2\pi(2.15u+0.12u^2),
+```
+
+```math
+q(u,t)=
+\sum_{m\in\{2,3,5,7,11,13\}}
+a_m e^{i(2\pi mu-\beta m^{3/2}t+\phi_m)},
+\qquad a_m\propto m^{-1.3}.
+```
+
+`r_max = 0.65` 倍 viewport 对角线，`r_min = 0.035` 倍短边，中心为 `(0.50W,0.48H)`，径向和切向谱形变分别为最大半径的 3.8% 与 6.0%。
+
+第 `j` 个 tracer 解析采样：
+
+```math
+X_j(t)=\Gamma(u_j(t),t)+\delta_jN(u_j,t),
+\qquad |\delta_j|\le10\text{ px}.
+```
+
+12 个历史样本覆盖 0.25–0.45 秒并直接构成弯曲 trail。出生相位预填在完整生命周期中，因此进入 Field Mode 时无需等待累积即可看见整条螺旋。
+
+### 旧二维速度场模型说明
+
+以下第 10a–11a 节只保留旧方案推导，不再作为 tracer 实现约束；其中的二维谱场仍可供花瓣、萤火虫等次级元素参考。
+
+### 10a. Tracer 的全局谱场
 
 网站 tracer 不直接把二维线性观测 z(t) 当作每个粒子的坐标。它退后一层，成为全局复值谱场的时间结构：
 
@@ -442,7 +484,7 @@ v_\psi(x,t)
 
 ---
 
-## 11. Tracer 状态与 RK2
+## 11a. Tracer 状态与 RK2（已废弃）
 
 第 i 个 tracer 只保存：
 
@@ -643,12 +685,14 @@ Ng = 3–4
 
 ## 15. 同一谱场，不同物种耦合
 
-Tracer 共享完全相同的 v_ψ，只因初始状态不同而位于不同积分曲线上。
+Tracer 共享完全相同的母轨道 `Γ`，只因出生相位和法向 lane 不同而位于同一条粒子河流的不同位置。
 
 花瓣、萤火虫与草仍保留自己的物种动力，但可以用不同耦合系数读取同一个场：
 
 ```math
-\dot X_{\mathrm{tracer}}=v_\psi,
+X_{\mathrm{tracer},j}
+=
+\Gamma(u_j,t)+\delta_jN(u_j,t),
 ```
 
 ```math
@@ -663,7 +707,7 @@ Tracer 共享完全相同的 v_ψ，只因初始状态不同而位于不同积�
 0.45v_\psi+g+w.
 ```
 
-因此统一感来自一个位置相关的全局场，而不是“所有对象使用同一条轨迹”，也不是“每个粒子拥有自己的谱轨道”。
+因此统一感来自共享 fractional clock。tracer 明确使用唯一母螺旋；花瓣、萤火虫和草仍保留各自物种动力并弱耦合旧二维谱场。
 
 ---
 
@@ -685,7 +729,7 @@ A_m
 \exp(-\kappa(t-t_0)).
 ```
 
-附近所有 tracer 都读取同一个受扰速度场。因此点击后会共同偏转，但频率、全局时钟和持久粒子状态都不重置。
+附近所有 tracer 都读取同一个受扰形变项 `q(u,t)`。因此点击后母轨道局部发生短时谱形变，但频率、全局时钟和出生相位都不重置。
 
 ---
 
@@ -711,7 +755,7 @@ g_j(p_t).
 
 ## 18. DOM obstacle：只改变 screen embedding
 
-网页卡片不改变 ψ、v_ψ 或 RK2 状态推进。
+网页卡片不改变 `Γ`、`q` 或 tracer 的解析参数。当前实现只计算 alpha mask：FieldBack 穿组件时保留 `0.08–0.15`，FieldFront 保留 `0.55–0.70`，轨迹本身保持连续。
 
 定义 canonical particle state：
 
@@ -749,7 +793,9 @@ render
 
 ---
 
-## 19. Soft warp
+## 19. Soft warp（已废弃）
+
+以下公式只保留旧方案推导。当前 tracer 不应用 `W_Ω`。
 
 对每个组件区域 `Ω_k`，设 signed distance：
 
@@ -893,7 +939,11 @@ r_j
 
 ---
 
-## 23. WebGL2 transform feedback
+## 23. WebGL2 解析式 instancing
+
+当前后景 tracer 不保存位置状态。顶点着色器使用 `gl_InstanceID`、统一时间、确定性出生相位和 lane 参数，直接生成 `800 × 12 × 6` 量级的顶点；glow 与 core 各绘制一次。进入 Field Mode 时出生相位已经覆盖完整生命周期，因此不需要 warm-up。
+
+### 旧 transform feedback 方案（已废弃）
 
 后景 tracer 的位置是持久状态，不能由当前时间直接解析重算。
 
@@ -921,6 +971,8 @@ Update shader 只调用共享的 fieldVelocityAt，不读取每粒子 phase 或 
 
 ## 24. Variable dt
 
+解析式 tracer 不依赖帧间 `Δt`，标签页恢复后直接按统一时钟采样。以下 RK2 约束只适用于仍采用积分更新的旧方案或次级元素。
+
 浏览器帧率不是严格固定。每帧使用实际 Δt，但对过大的间隔设上界，避免标签页恢复或卡顿后一帧跨越过远。
 
 RK2 的两个采样时刻必须是：
@@ -936,6 +988,8 @@ t_n+\frac{\Delta t}{2}.
 ---
 
 ## 25. 生命周期与数值稳定
+
+当前 tracer 采用约 10 秒解析周期，周期首尾 alpha 淡入淡出；法向 lane 固定在 ±10 px，尾迹跨周期时直接截断，避免从内圈连到外圈。
 
 Tracer 生命周期推荐 12–28 秒。寿命结束时：
 
@@ -1085,7 +1139,35 @@ attractor
 
 ## 30. 推荐默认 tracer preset
 
-第一版使用：
+当前版本使用：
+
+```text
+master spiral turns:
+2.15 + quadratic 0.12
+
+radius:
+0.65 × viewport diagonal → 0.035 × short side
+
+deformation:
+radial 3.8%, tangential 6.0%
+
+mode indices:
+[2, 3, 5, 7, 11, 13]
+
+active tracers:
+500–900, about 650 at 1920×1080
+
+front ratio:
+about 15%
+
+trail:
+12 samples, 0.25–0.45 s
+
+lane:
+±10 px
+```
+
+以下为旧速度场第一版参数（已废弃）：
 
 ```text
 alpha = 1.5
@@ -1163,7 +1245,48 @@ foreground subset: sparse
 
 ## 32. 最终核心公式
 
-整个 tracer 动力链写成：
+当前 tracer 动力链写成：
+
+```math
+\boxed{
+X_j(t)
+=
+\Gamma(u_j(t),t)
++\delta_jN(u_j,t)
+}
+```
+
+```math
+\boxed{
+\Gamma(u,t)
+=
+C+r(u)e^{i\theta(u)}
++\varepsilon_r\operatorname{Re}q(u,t)e_r
++\varepsilon_\theta\operatorname{Im}q(u,t)e_\theta
+}
+```
+
+```math
+\boxed{
+q(u,t)
+=
+\sum_m a_m e^{i(2\pi mu-\beta m^{3/2}t+\phi_m)}
+}
+```
+
+数学层级必须保持：
+
+```text
+fractional spectral clock
+    ↓
+one viewport-scale master spiral
+    ↓
+analytic curved trail samples
+```
+
+### 旧速度场核心公式（已废弃）
+
+以下公式不再驱动 tracer，只作为旧方案和次级物种场的参考：
 
 ```math
 \boxed{
