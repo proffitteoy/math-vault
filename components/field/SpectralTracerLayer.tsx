@@ -72,8 +72,6 @@ layout(location = 0) in vec2 aState;
 
 uniform float uAlpha;
 uniform float uTheme;
-uniform vec4 uObstacles[8];
-uniform int uObstacleCount;
 uniform float uPass;
 uniform float uLambda[6];
 uniform vec2 uResolution;
@@ -83,6 +81,7 @@ ${SPECTRAL_ORBIT_GLSL}
 out float vAlpha;
 out float vTheme;
 out float vColorIndex;
+out vec2 vPosition;
 
 float hash11(float value) {
   return fract(sin(value * 127.1) * 43758.5453123);
@@ -114,18 +113,6 @@ void main() {
   float width = mix(coreWidth, glowWidth, uPass);
   position += normal * side * width * 0.5;
 
-  float obstacleShade = 1.0;
-  for (int index = 0; index < 8; index++) {
-    if (index >= uObstacleCount) break;
-    vec4 obstacle = uObstacles[index];
-    bool inside =
-      position.x > obstacle.x &&
-      position.x < obstacle.z &&
-      position.y > obstacle.y &&
-      position.y < obstacle.w;
-    obstacleShade *= inside ? 0.20 : 1.0;
-  }
-
   float alphaRoll = highlight ? 1.0 : hash11(seed * 6.41);
   float coreAlpha = mix(mix(0.38, 0.58, alphaRoll), mix(0.48, 0.68, alphaRoll), uTheme);
   float glowAlpha = mix(mix(0.04, 0.08, alphaRoll), mix(0.07, 0.12, alphaRoll), uTheme);
@@ -136,18 +123,23 @@ void main() {
   );
 
   gl_Position = vec4(clip, 0.0, 1.0);
-  vAlpha = mix(coreAlpha, glowAlpha, uPass) * flowAlpha * aState.y * uAlpha * obstacleShade;
+  vAlpha = mix(coreAlpha, glowAlpha, uPass) * flowAlpha * aState.y * uAlpha;
+  vPosition = position;
   vTheme = uTheme;
   vColorIndex = styleRoll < 0.80 ? 0.0 : (styleRoll < 0.95 ? 1.0 : 2.0);
 }
 `
 
 const FRAGMENT_SHADER = String.raw`#version 300 es
-precision mediump float;
+precision highp float;
+
+uniform vec4 uObstacles[8];
+uniform int uObstacleCount;
 
 in float vAlpha;
 in float vTheme;
 in float vColorIndex;
+in vec2 vPosition;
 out vec4 outColor;
 
 void main() {
@@ -159,7 +151,19 @@ void main() {
     vColorIndex < 0.5
       ? vec3(0.525, 0.788, 1.000)
       : (vColorIndex < 1.5 ? vec3(0.639, 0.741, 1.000) : vec3(0.714, 0.682, 1.000));
-  outColor = vec4(mix(day, night, vTheme), vAlpha);
+  bool overComponent = false;
+  for (int index = 0; index < 8; index++) {
+    if (index >= uObstacleCount) break;
+    vec4 obstacle = uObstacles[index];
+    if (vPosition.x >= obstacle.x && vPosition.x <= obstacle.z &&
+        vPosition.y >= obstacle.y && vPosition.y <= obstacle.w) {
+      overComponent = true;
+      break;
+    }
+  }
+  vec3 gray = vec3(mix(128.0, 176.0, vTheme) / 255.0);
+  outColor = vec4(overComponent ? gray : mix(day, night, vTheme),
+    vAlpha * (overComponent ? 0.20 : 1.0));
 }
 `
 
@@ -426,15 +430,6 @@ function tracerStyle(seed: number, theme: number) {
   }
 }
 
-function obstacleShade(x: number, y: number, obstacles: TracerObstacle[]) {
-  for (const obstacle of obstacles) {
-    if (x >= obstacle.left && x <= obstacle.right && y >= obstacle.top && y <= obstacle.bottom) {
-      return 0.72
-    }
-  }
-  return 1
-}
-
 export function createSpectralTracerController(
   backCanvas: HTMLCanvasElement,
   frontCanvas: HTMLCanvasElement,
@@ -499,29 +494,57 @@ export function createSpectralTracerController(
         tracer,
         points,
         style: tracerStyle(tracer.seed, theme),
-        alpha: frontAlpha * tracer.opacity * obstacleShade(points[0].x, points[0].y, obstacles),
+        alpha: frontAlpha * tracer.opacity,
       })
     }
 
-    const drawTrails = (glow: boolean) => {
+    // Clip the actual stroke, including its glow, rather than classifying the head.
+    const componentClip = new Path2D()
+    const backgroundClips = obstacles.map((obstacle) => {
+      const rectWidth = obstacle.right - obstacle.left
+      const rectHeight = obstacle.bottom - obstacle.top
+      componentClip.rect(obstacle.left, obstacle.top, rectWidth, rectHeight)
+      const outside = new Path2D()
+      outside.rect(0, 0, width, height)
+      outside.rect(obstacle.left, obstacle.top, rectWidth, rectHeight)
+      return outside
+    })
+    const gray = Math.round(128 + 48 * theme)
+    const drawTrails = (glow: boolean, overComponent: boolean) => {
+      if (overComponent && !obstacles.length) return
+      frontContext.save()
+      if (overComponent) {
+        frontContext.clip(componentClip)
+      } else {
+        // Intersect complements so overlapping components remain one masked region.
+        for (const outside of backgroundClips) frontContext.clip(outside, "evenodd")
+      }
       frontContext.globalCompositeOperation = glow ? "lighter" : "source-over"
       for (const { points, style, alpha: tracerAlpha } of trails) {
-        frontContext.strokeStyle = `rgb(${style.color[0]}, ${style.color[1]}, ${style.color[2]})`
+        frontContext.strokeStyle = overComponent
+          ? `rgb(${gray}, ${gray}, ${gray})`
+          : `rgb(${style.color[0]}, ${style.color[1]}, ${style.color[2]})`
         frontContext.lineWidth = glow ? style.glowWidth : style.coreWidth
         for (let segment = 0; segment < points.length - 1; segment++) {
           const flowAlpha = Math.pow(1 - segment / TRAIL_SEGMENTS, 1.2)
           frontContext.globalAlpha =
-            tracerAlpha * flowAlpha * (glow ? style.glowAlpha : style.coreAlpha)
+            tracerAlpha *
+            flowAlpha *
+            (glow ? style.glowAlpha : style.coreAlpha) *
+            (overComponent ? 0.72 : 1)
           frontContext.beginPath()
           frontContext.moveTo(points[segment].x, points[segment].y)
           frontContext.lineTo(points[segment + 1].x, points[segment + 1].y)
           frontContext.stroke()
         }
       }
+      frontContext.restore()
     }
 
-    drawTrails(true)
-    drawTrails(false)
+    drawTrails(true, false)
+    drawTrails(true, true)
+    drawTrails(false, false)
+    drawTrails(false, true)
     frontContext.globalCompositeOperation = "source-over"
     frontContext.globalAlpha = 1
   }

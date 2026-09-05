@@ -642,9 +642,9 @@ Pointer move 不参与 tracer 数学链，避免把同一条时间平移轨道�
 
 ---
 
-## 17. DOM obstacle：只改变 alpha
+## 17. DOM obstacle：只改变颜色和 alpha
 
-网页卡片不改变 `γ`、`Q`、可见区间或 `t_k`。当前实现只根据 DOM 矩形计算 alpha mask：FieldBack 乘 `0.20`，FieldFront 乘 `0.72`，轨迹位置和尾迹采样始终连续。
+网页卡片不改变 `γ`、`Q`、可见区间或 `t_k`。根据 DOM 矩形对实际尾迹覆盖区域应用颜色和 alpha 遮罩：背景空白处保留蓝色，组件内 core 与 glow 使用中性灰（日间 `#808080`、夜间 `#B0B0B0`）；FieldBack 乘 `0.20`，FieldFront 乘 `0.72`。重叠矩形只应用一次遮罩，轨迹位置和尾迹采样始终连续。
 
 因此：
 
