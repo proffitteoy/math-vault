@@ -8,8 +8,8 @@ export const SPECTRAL_TRACER_FOREGROUND = 120
 export const SPECTRAL_TRACER_CAPACITY = 4096
 export const SPECTRAL_TRACER_MAX_OBSTACLES = 8
 
-const BACKGROUND_RENDER_CAPACITY = 560
-const FOREGROUND_RENDER_CAPACITY = 36
+const BACKGROUND_RENDER_CAPACITY = 1280
+const FOREGROUND_RENDER_CAPACITY = 48
 const FIELD_KX = [1.0, 2.0, 3.0, 1.0, 4.0, 2.0] as const
 const FIELD_KY = [2.0, -1.0, 1.0, -3.0, 2.0, 5.0] as const
 const FIELD_AMPLITUDES = [1.0, 0.72, 0.5, 0.38, 0.26, 0.18] as const
@@ -60,13 +60,13 @@ function fract(value: number) {
   return value - Math.floor(value)
 }
 
-function seedAt(index: number, time: number, width: number, height: number) {
+function seedAt(index: number, width: number, height: number) {
   const sample = index + 1
-  const driftX = 0.018 * Math.sin(time * 0.21 + index * 0.017)
-  const driftY = 0.018 * Math.sin(time * 0.17 + index * 0.023 + 1.7)
+  const u = fract(0.5 + R2_A1 * sample)
+  const v = fract(0.5 + R2_A2 * sample)
   return {
-    x: fract(0.5 + R2_A1 * sample + driftX) * width,
-    y: fract(0.5 + R2_A2 * sample + driftY) * height,
+    x: (-0.04 + u * 1.08) * width,
+    y: (-0.04 + v * 1.08) * height,
   }
 }
 
@@ -107,6 +107,93 @@ function velocityAt(
   return { x: vx / magnitude, y: vy / magnitude }
 }
 
+type VelocityGrid = {
+  columns: number
+  rows: number
+  width: number
+  height: number
+  values: Float32Array
+}
+
+type VelocityGridAt = (
+  time: number,
+  width: number,
+  height: number,
+  modeCount: number,
+) => VelocityGrid
+
+function createVelocityGridCache(): VelocityGridAt {
+  let grid: VelocityGrid | null = null
+  let lastTime = Number.NaN
+  let lastModeCount = -1
+
+  return (time, width, height, modeCount) => {
+    const columns = Math.max(36, Math.min(72, Math.ceil(width / 22) + 1))
+    const rows = Math.max(24, Math.min(48, Math.ceil(height / 22) + 1))
+    if (
+      !grid ||
+      grid.columns !== columns ||
+      grid.rows !== rows ||
+      grid.width !== width ||
+      grid.height !== height
+    ) {
+      grid = {
+        columns,
+        rows,
+        width,
+        height,
+        values: new Float32Array(columns * rows * 2),
+      }
+      lastTime = Number.NaN
+    }
+
+    if (time === lastTime && modeCount === lastModeCount) return grid
+
+    for (let row = 0; row < rows; row++) {
+      const y = (row / (rows - 1)) * height
+      for (let column = 0; column < columns; column++) {
+        const x = (column / (columns - 1)) * width
+        const velocity = velocityAt(x, y, time, width, height, modeCount)
+        const offset = (row * columns + column) * 2
+        grid.values[offset] = velocity.x
+        grid.values[offset + 1] = velocity.y
+      }
+    }
+
+    lastTime = time
+    lastModeCount = modeCount
+    return grid
+  }
+}
+
+function sampleVelocityGrid(grid: VelocityGrid, x: number, y: number) {
+  const gridX = Math.min(grid.columns - 1, Math.max(0, (x / grid.width) * (grid.columns - 1)))
+  const gridY = Math.min(grid.rows - 1, Math.max(0, (y / grid.height) * (grid.rows - 1)))
+  const left = Math.floor(gridX)
+  const top = Math.floor(gridY)
+  const right = Math.min(grid.columns - 1, left + 1)
+  const bottom = Math.min(grid.rows - 1, top + 1)
+  const mixX = gridX - left
+  const mixY = gridY - top
+  const topLeft = (top * grid.columns + left) * 2
+  const topRight = (top * grid.columns + right) * 2
+  const bottomLeft = (bottom * grid.columns + left) * 2
+  const bottomRight = (bottom * grid.columns + right) * 2
+  const vxTop = grid.values[topLeft] + (grid.values[topRight] - grid.values[topLeft]) * mixX
+  const vyTop =
+    grid.values[topLeft + 1] + (grid.values[topRight + 1] - grid.values[topLeft + 1]) * mixX
+  const vxBottom =
+    grid.values[bottomLeft] + (grid.values[bottomRight] - grid.values[bottomLeft]) * mixX
+  const vyBottom =
+    grid.values[bottomLeft + 1] +
+    (grid.values[bottomRight + 1] - grid.values[bottomLeft + 1]) * mixX
+  const vx = vxTop + (vxBottom - vxTop) * mixY
+  const vy = vyTop + (vyBottom - vyTop) * mixY
+  const magnitude = Math.hypot(vx, vy)
+  if (magnitude < 1e-5) return { x: 1, y: 0 }
+  return { x: vx / magnitude, y: vy / magnitude }
+}
+
 function appendStreamline(
   path: Path2D,
   seedX: number,
@@ -114,21 +201,18 @@ function appendStreamline(
   direction: 1 | -1,
   steps: number,
   stepLength: number,
-  time: number,
-  width: number,
-  height: number,
-  modeCount: number,
+  grid: VelocityGrid,
 ) {
   let x = seedX
   let y = seedY
   path.moveTo(x, y)
 
   for (let step = 0; step < steps; step++) {
-    const velocity = velocityAt(x, y, time, width, height, modeCount)
+    const velocity = sampleVelocityGrid(grid, x, y)
     x += velocity.x * stepLength * direction
     y += velocity.y * stepLength * direction
 
-    if (x < -24 || x > width + 24 || y < -24 || y > height + 24) break
+    if (x < -24 || x > grid.width + 24 || y < -24 || y > grid.height + 24) break
     path.lineTo(x, y)
   }
 }
@@ -138,6 +222,7 @@ function createLayerRenderer(
   parameterOffset: number,
   capacity: number,
   layer: 0 | 1,
+  velocityGridAt: VelocityGridAt,
 ): LayerRenderer | null {
   const context = canvas.getContext("2d", { alpha: true })
   if (!context) return null
@@ -150,8 +235,10 @@ function createLayerRenderer(
     logicalWidth = Math.max(1, width)
     logicalHeight = Math.max(1, height)
     logicalPixelRatio = Math.max(1, pixelRatio)
-    canvas.width = Math.max(1, Math.floor(logicalWidth * logicalPixelRatio))
-    canvas.height = Math.max(1, Math.floor(logicalHeight * logicalPixelRatio))
+    const physicalWidth = Math.max(1, Math.floor(logicalWidth * logicalPixelRatio))
+    const physicalHeight = Math.max(1, Math.floor(logicalHeight * logicalPixelRatio))
+    if (canvas.width !== physicalWidth) canvas.width = physicalWidth
+    if (canvas.height !== physicalHeight) canvas.height = physicalHeight
     canvas.style.width = logicalWidth + "px"
     canvas.style.height = logicalHeight + "px"
     context.setTransform(logicalPixelRatio, 0, 0, logicalPixelRatio, 0, 0)
@@ -174,14 +261,18 @@ function createLayerRenderer(
     if (alpha <= 0.001) return
 
     const requested = layer === 0 ? backgroundCount : foregroundCount
-    const scale = layer === 0 ? BACKGROUND_RENDER_CAPACITY / SPECTRAL_TRACER_BACKGROUND : FOREGROUND_RENDER_CAPACITY / SPECTRAL_TRACER_FOREGROUND
+    const scale =
+      layer === 0
+        ? BACKGROUND_RENDER_CAPACITY / SPECTRAL_TRACER_BACKGROUND
+        : FOREGROUND_RENDER_CAPACITY / SPECTRAL_TRACER_FOREGROUND
     const count = Math.max(0, Math.min(Math.round(requested * scale), capacity))
     if (count <= 0) return
 
+    const velocityGrid = velocityGridAt(time, width, height, modeCount)
     const steps =
       layer === 0
-        ? Math.max(12, Math.min(22, trailSamples + 4))
-        : Math.max(8, Math.min(15, trailSamples))
+        ? Math.max(6, Math.min(10, Math.round(trailSamples * 0.65)))
+        : Math.max(5, Math.min(8, Math.round(trailSamples * 0.55)))
     const baseStep = Math.min(width, height) / (layer === 0 ? 112 : 128)
     const stepLength = Math.max(
       layer === 0 ? 6.2 : 5.2,
@@ -200,37 +291,14 @@ function createLayerRenderer(
 
       for (let localIndex = bucket; localIndex < count; localIndex += 3) {
         const index = parameterOffset + localIndex
-        const seed = seedAt(index, time, width, height)
-        appendStreamline(
-          path,
-          seed.x,
-          seed.y,
-          1,
-          steps,
-          stepLength,
-          time,
-          width,
-          height,
-          modeCount,
-        )
-        appendStreamline(
-          path,
-          seed.x,
-          seed.y,
-          -1,
-          steps,
-          stepLength,
-          time,
-          width,
-          height,
-          modeCount,
-        )
+        const seed = seedAt(index, width, height)
+        appendStreamline(path, seed.x, seed.y, 1, steps, stepLength, velocityGrid)
+        appendStreamline(path, seed.x, seed.y, -1, steps, stepLength, velocityGrid)
       }
 
       context.globalCompositeOperation = "lighter"
       context.strokeStyle = palette[bucket]
-      context.globalAlpha =
-        alpha * (layer === 0 ? 0.075 + theme * 0.025 : 0.07 + theme * 0.035)
+      context.globalAlpha = alpha * (layer === 0 ? 0.075 + theme * 0.025 : 0.07 + theme * 0.035)
       context.lineWidth = layer === 0 ? 3.2 : 2.8
       context.stroke(path)
 
@@ -267,12 +335,20 @@ export function createSpectralTracerController(
   backCanvas: HTMLCanvasElement,
   frontCanvas: HTMLCanvasElement,
 ): SpectralTracerController | null {
-  const backRenderer = createLayerRenderer(backCanvas, 0, BACKGROUND_RENDER_CAPACITY, 0)
+  const velocityGridAt = createVelocityGridCache()
+  const backRenderer = createLayerRenderer(
+    backCanvas,
+    0,
+    BACKGROUND_RENDER_CAPACITY,
+    0,
+    velocityGridAt,
+  )
   const frontRenderer = createLayerRenderer(
     frontCanvas,
     SPECTRAL_TRACER_BACKGROUND,
     FOREGROUND_RENDER_CAPACITY,
     1,
+    velocityGridAt,
   )
 
   if (!backRenderer || !frontRenderer) return null

@@ -52,7 +52,7 @@ const FIELD_QUALITY: FieldQuality[] = [
     foregroundCount: SPECTRAL_TRACER_FOREGROUND,
     pixelRatio: 1.5,
     modeCount: 6,
-    trailSamples: 14,
+    trailSamples: 8,
     frameMs: 1000 / 60,
   },
   {
@@ -60,7 +60,7 @@ const FIELD_QUALITY: FieldQuality[] = [
     foregroundCount: 100,
     pixelRatio: 1.5,
     modeCount: 6,
-    trailSamples: 12,
+    trailSamples: 8,
     frameMs: 1000 / 60,
   },
   {
@@ -68,7 +68,7 @@ const FIELD_QUALITY: FieldQuality[] = [
     foregroundCount: 80,
     pixelRatio: 1.25,
     modeCount: 6,
-    trailSamples: 12,
+    trailSamples: 8,
     frameMs: 1000 / 60,
   },
   {
@@ -76,7 +76,7 @@ const FIELD_QUALITY: FieldQuality[] = [
     foregroundCount: 64,
     pixelRatio: 1,
     modeCount: 6,
-    trailSamples: 10,
+    trailSamples: 7,
     frameMs: 1000 / 60,
   },
   {
@@ -84,7 +84,7 @@ const FIELD_QUALITY: FieldQuality[] = [
     foregroundCount: 48,
     pixelRatio: 1,
     modeCount: 5,
-    trailSamples: 8,
+    trailSamples: 6,
     frameMs: 1000 / 45,
   },
   {
@@ -259,8 +259,10 @@ export default function FieldScene() {
       context: CanvasRenderingContext2D,
       pixelRatio: number,
     ) => {
-      canvas.width = Math.max(1, Math.floor(width * pixelRatio))
-      canvas.height = Math.max(1, Math.floor(height * pixelRatio))
+      const physicalWidth = Math.max(1, Math.floor(width * pixelRatio))
+      const physicalHeight = Math.max(1, Math.floor(height * pixelRatio))
+      if (canvas.width !== physicalWidth) canvas.width = physicalWidth
+      if (canvas.height !== physicalHeight) canvas.height = physicalHeight
       canvas.style.width = width + "px"
       canvas.style.height = height + "px"
       context.setTransform(pixelRatio, 0, 0, pixelRatio, 0, 0)
@@ -486,8 +488,9 @@ export default function FieldScene() {
       const transitioning = fieldBlend > 0.001 && fieldBlend < 0.999
       const targetFrameMs =
         modeRef.current === "field" || transitioning ? quality.frameMs : NORMAL_FRAME_MS
-      if (!force && elapsedSinceLastFrame < targetFrameMs) return
-      lastFrame = now - (elapsedSinceLastFrame % targetFrameMs)
+      const throttled = targetFrameMs > 1000 / 55
+      if (!force && throttled && elapsedSinceLastFrame < targetFrameMs - 0.5) return
+      lastFrame = throttled ? now - (elapsedSinceLastFrame % targetFrameMs) : now
 
       const deltaSeconds = clamp(elapsedSinceLastFrame / 1000, 0, 0.1)
 
