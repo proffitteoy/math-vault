@@ -2,24 +2,20 @@
 
 import type { RefObject } from "react"
 import {
-  ORBIT_LAMBDAS,
-  ORBIT_PLAYBACK_SPEED,
-  SPECTRAL_ORBIT_GLSL,
-  VISIBLE_INTERVALS,
-  sampleOrbit,
-  sampleVisibleTime,
-  viewportTransform,
-  visibleIntervalAt,
-  type OrbitPoint,
-} from "./spectralOrbit"
+  SPECTRAL_FIELD_GLSL,
+  SPECTRAL_LAMBDAS,
+  SPECTRAL_PLAYBACK_RATE,
+  spectralParameterAt,
+} from "./spectralField"
 
-export const SPECTRAL_TRACER_TARGET = 600
-export const SPECTRAL_TRACER_CAPACITY = 1200
-export const SPECTRAL_TRACER_FOREGROUND = 90
+export const SPECTRAL_TRACER_BACKGROUND = 3200
+export const SPECTRAL_TRACER_FOREGROUND = 120
+export const SPECTRAL_TRACER_CAPACITY = 4096
 export const SPECTRAL_TRACER_MAX_OBSTACLES = 8
 
-const TRAIL_SAMPLES = 12
-const TRAIL_SEGMENTS = TRAIL_SAMPLES - 1
+const MAX_TRAIL_SAMPLES = 8
+const MAX_TRAIL_SEGMENTS = MAX_TRAIL_SAMPLES - 1
+const STATE_COMPONENTS = 4
 
 export type TracerObstacle = {
   left: number
@@ -28,27 +24,14 @@ export type TracerObstacle = {
   bottom: number
 }
 
-type TracerPhase = "visible" | "fade-out" | "fade-in"
-
-type TracerState = {
-  seed: number
-  generation: number
-  intervalIndex: number
-  orbitTime: number
-  opacity: number
-  phase: TracerPhase
-  phaseAge: number
-  phaseDuration: number
-  phaseStartOpacity: number
-  trailDuration: number
-}
-
 export type SpectralTracerFrame = {
-  deltaSeconds: number
   alpha: number
   theme: number
-  totalCount: number
+  time: number
+  backgroundCount: number
   foregroundCount: number
+  trailSamples: number
+  modeCount: number
   width: number
   height: number
   obstacles: TracerObstacle[]
@@ -61,26 +44,32 @@ export type SpectralTracerController = {
 }
 
 type SpectralTracerLayerProps = {
-  backCanvasRef: RefObject<HTMLCanvasElement | null>
-  frontCanvasRef: RefObject<HTMLCanvasElement | null>
+  fieldCanvasRef: RefObject<HTMLCanvasElement | null>
+  interactionCanvasRef: RefObject<HTMLCanvasElement | null>
 }
 
 const VERTEX_SHADER = String.raw`#version 300 es
 precision highp float;
 
-layout(location = 0) in vec2 aState;
+layout(location = 0) in vec4 aState;
 
 uniform float uAlpha;
 uniform float uTheme;
-uniform float uPass;
+uniform float uTime;
+uniform float uLayer;
+uniform float uGlow;
+uniform float uTrailSegments;
+uniform float uFieldScale;
 uniform float uLambda[6];
+uniform int uModeCount;
 uniform vec2 uResolution;
 
-${SPECTRAL_ORBIT_GLSL}
+${SPECTRAL_FIELD_GLSL}
 
 out float vAlpha;
 out float vTheme;
 out float vColorIndex;
+out float vLayer;
 out vec2 vPosition;
 
 float hash11(float value) {
@@ -88,45 +77,54 @@ float hash11(float value) {
 }
 
 void main() {
-  float seed = float(gl_InstanceID + 1);
-  float trailDuration = mix(0.10, 0.18, hash11(seed * 7.13 + 1.9));
+  vec2 parameter = aState.xy;
+  float opacity = aState.z;
+  float styleSeed = aState.w;
+  float trailDuration = mix(0.08, 0.22, hash11(styleSeed * 7.13 + 1.9));
   int segment = gl_VertexID / 6;
   int corner = gl_VertexID - segment * 6;
-  float segmentStart = float(segment) / float(${TRAIL_SEGMENTS});
-  float segmentEnd = float(segment + 1) / float(${TRAIL_SEGMENTS});
-  vec2 start = viewportOrbitPoint(aState.x - segmentStart * trailDuration);
-  vec2 end = viewportOrbitPoint(aState.x - segmentEnd * trailDuration);
+  float segmentStart = float(segment) / uTrailSegments;
+  float segmentEnd = float(segment + 1) / uTrailSegments;
+  float historyScale = ${SPECTRAL_PLAYBACK_RATE.toFixed(2)};
+  vec2 start = viewportFieldPoint(
+    parameter,
+    uTime - segmentStart * trailDuration * historyScale
+  );
+  vec2 end = viewportFieldPoint(
+    parameter,
+    uTime - segmentEnd * trailDuration * historyScale
+  );
   bool useStart = corner == 0 || corner == 3 || corner == 5;
   float side = corner == 0 || corner == 1 || corner == 3 ? -1.0 : 1.0;
   vec2 position = useStart ? start : end;
   vec2 direction = normalize(start - end + vec2(0.0001));
   vec2 normal = vec2(-direction.y, direction.x);
-  float styleRoll = hash11(seed * 5.73);
-  float widthRoll = hash11(seed * 8.73);
-  bool bright = styleRoll >= 0.80;
-  bool highlight = styleRoll >= 0.95;
-  float dayCore = bright ? mix(2.4, 3.0, widthRoll) : mix(1.5, 2.2, widthRoll);
-  float nightCore = bright ? mix(2.2, 2.8, widthRoll) : mix(1.4, 2.0, widthRoll);
-  float coreWidth = mix(dayCore, nightCore, uTheme);
-  if (highlight) coreWidth = mix(3.0, 2.8, uTheme);
-  float glowWidth = mix(mix(3.5, 5.5, widthRoll), mix(4.0, 6.0, widthRoll), uTheme);
-  float width = mix(coreWidth, glowWidth, uPass);
-  position += normal * side * width * 0.5;
 
-  float alphaRoll = highlight ? 1.0 : hash11(seed * 6.41);
-  float coreAlpha = mix(mix(0.38, 0.58, alphaRoll), mix(0.48, 0.68, alphaRoll), uTheme);
-  float glowAlpha = mix(mix(0.04, 0.08, alphaRoll), mix(0.07, 0.12, alphaRoll), uTheme);
-  float flowAlpha = pow(1.0 - segmentStart, 1.2);
+  float widthRoll = hash11(styleSeed * 8.73);
+  float alphaRoll = hash11(styleSeed * 6.41);
+  float coreWidth = mix(0.82, 1.48, widthRoll) - uTheme * 0.08;
+  float glowWidth = mix(2.8, 4.8, widthRoll) + uTheme * 0.3;
+  position += normal * side * mix(coreWidth, glowWidth, uGlow) * 0.5;
+
+  float dayCoreAlpha = mix(0.10, 0.22, alphaRoll);
+  float nightCoreAlpha = mix(0.16, 0.30, alphaRoll);
+  float dayGlowAlpha = mix(0.015, 0.045, alphaRoll);
+  float nightGlowAlpha = mix(0.03, 0.07, alphaRoll);
+  float coreAlpha = mix(dayCoreAlpha, nightCoreAlpha, uTheme);
+  float glowAlpha = mix(dayGlowAlpha, nightGlowAlpha, uTheme);
+  float flowAlpha = pow(1.0 - segmentStart, 1.15);
+  float layerAlpha = mix(1.0, 1.12, uLayer);
   vec2 clip = vec2(
     position.x * 2.0 / uResolution.x - 1.0,
     1.0 - position.y * 2.0 / uResolution.y
   );
 
   gl_Position = vec4(clip, 0.0, 1.0);
-  vAlpha = mix(coreAlpha, glowAlpha, uPass) * flowAlpha * aState.y * uAlpha;
+  vAlpha = mix(coreAlpha, glowAlpha, uGlow) * flowAlpha * opacity * uAlpha * layerAlpha;
   vPosition = position;
   vTheme = uTheme;
-  vColorIndex = styleRoll < 0.80 ? 0.0 : (styleRoll < 0.95 ? 1.0 : 2.0);
+  vLayer = uLayer;
+  vColorIndex = floor(hash11(styleSeed * 5.73) * 3.0);
 }
 `
 
@@ -139,118 +137,45 @@ uniform int uObstacleCount;
 in float vAlpha;
 in float vTheme;
 in float vColorIndex;
+in float vLayer;
 in vec2 vPosition;
 out vec4 outColor;
 
 void main() {
   vec3 day =
     vColorIndex < 0.5
-      ? vec3(0.263, 0.561, 0.816)
-      : (vColorIndex < 1.5 ? vec3(0.318, 0.529, 0.816) : vec3(0.400, 0.490, 0.847));
+      ? vec3(0.235, 0.510, 0.790)
+      : (vColorIndex < 1.5 ? vec3(0.255, 0.590, 0.835) : vec3(0.405, 0.390, 0.755));
   vec3 night =
     vColorIndex < 0.5
-      ? vec3(0.525, 0.788, 1.000)
-      : (vColorIndex < 1.5 ? vec3(0.639, 0.741, 1.000) : vec3(0.714, 0.682, 1.000));
-  bool overComponent = false;
+      ? vec3(0.625, 0.850, 1.000)
+      : (vColorIndex < 1.5 ? vec3(0.535, 0.760, 0.980) : vec3(0.765, 0.710, 0.980));
+  float inside = 0.0;
+  float backgroundMask = 1.0;
+
   for (int index = 0; index < 8; index++) {
     if (index >= uObstacleCount) break;
     vec4 obstacle = uObstacles[index];
-    if (vPosition.x >= obstacle.x && vPosition.x <= obstacle.z &&
-        vPosition.y >= obstacle.y && vPosition.y <= obstacle.w) {
-      overComponent = true;
-      break;
-    }
+    bool inRect =
+      vPosition.x >= obstacle.x && vPosition.x <= obstacle.z &&
+      vPosition.y >= obstacle.y && vPosition.y <= obstacle.w;
+    vec2 outsideDelta = max(max(obstacle.xy - vPosition, vPosition - obstacle.zw), vec2(0.0));
+    float edgeDistance = length(outsideDelta);
+    float haloMask = mix(0.15, 1.0, smoothstep(0.0, 18.0, edgeDistance));
+    backgroundMask = min(backgroundMask, haloMask);
+    if (inRect) inside = 1.0;
   }
-  vec3 gray = vec3(mix(128.0, 176.0, vTheme) / 255.0);
-  outColor = vec4(overComponent ? gray : mix(day, night, vTheme),
-    vAlpha * (overComponent ? 0.20 : 1.0));
+
+  vec3 fieldColor = mix(day, night, vTheme);
+  vec3 gray = vec3(mix(0.50, 0.69, vTheme));
+  float componentMask = vLayer < 0.5 ? backgroundMask : mix(1.0, 0.62, inside);
+  outColor = vec4(mix(fieldColor, gray, inside), vAlpha * componentMask);
 }
 `
 
 function hash(index: number, seed: number) {
   const value = Math.sin(index * 12.9898 + seed * 78.233) * 43758.5453
   return value - Math.floor(value)
-}
-
-function clamp(value: number, minimum: number, maximum: number) {
-  return Math.min(maximum, Math.max(minimum, value))
-}
-
-function smoothstep(value: number) {
-  const bounded = clamp(value, 0, 1)
-  return bounded * bounded * (3 - 2 * bounded)
-}
-
-function createTracer(index: number): TracerState {
-  const seed = index + 1
-  const selection =
-    index < VISIBLE_INTERVALS.length
-      ? { index, interval: VISIBLE_INTERVALS[index] }
-      : visibleIntervalAt(hash(seed, 31))
-
-  return {
-    seed,
-    generation: 0,
-    intervalIndex: selection.index,
-    orbitTime: sampleVisibleTime(selection.interval, hash(seed, 37)),
-    opacity: 1,
-    phase: "visible",
-    phaseAge: 0,
-    phaseDuration: 0,
-    phaseStartOpacity: 1,
-    trailDuration: 0.1 + hash(seed, 41) * 0.08,
-  }
-}
-
-function beginFadeOut(tracer: TracerState) {
-  tracer.phase = "fade-out"
-  tracer.phaseAge = 0
-  tracer.phaseDuration = 0.2 + hash(tracer.seed, 53 + tracer.generation) * 0.2
-  tracer.phaseStartOpacity = tracer.opacity
-}
-
-function rescheduleTracer(tracer: TracerState) {
-  tracer.generation += 1
-  const selection = visibleIntervalAt(hash(tracer.seed, 71 + tracer.generation * 13))
-  tracer.intervalIndex =
-    selection.index === tracer.intervalIndex
-      ? (selection.index + 1 + Math.floor(hash(tracer.seed, 73 + tracer.generation) * 7)) %
-        VISIBLE_INTERVALS.length
-      : selection.index
-  const interval = VISIBLE_INTERVALS[tracer.intervalIndex]
-  tracer.orbitTime = sampleVisibleTime(interval, hash(tracer.seed, 79 + tracer.generation * 17))
-  tracer.opacity = 0
-  tracer.phase = "fade-in"
-  tracer.phaseAge = 0
-  tracer.phaseDuration = 0.4 + hash(tracer.seed, 83 + tracer.generation) * 0.4
-  tracer.phaseStartOpacity = 0
-}
-
-function advanceTracer(tracer: TracerState, deltaSeconds: number) {
-  tracer.orbitTime += ORBIT_PLAYBACK_SPEED * deltaSeconds
-  tracer.phaseAge += deltaSeconds
-
-  if (tracer.phase === "visible") {
-    tracer.opacity = 1
-    if (tracer.orbitTime > VISIBLE_INTERVALS[tracer.intervalIndex][1]) beginFadeOut(tracer)
-    return
-  }
-
-  if (tracer.phase === "fade-out") {
-    tracer.opacity =
-      tracer.phaseStartOpacity * (1 - smoothstep(tracer.phaseAge / tracer.phaseDuration))
-    if (tracer.phaseAge >= tracer.phaseDuration) rescheduleTracer(tracer)
-    return
-  }
-
-  tracer.opacity = smoothstep(tracer.phaseAge / tracer.phaseDuration)
-  if (tracer.orbitTime > VISIBLE_INTERVALS[tracer.intervalIndex][1]) {
-    beginFadeOut(tracer)
-  } else if (tracer.phaseAge >= tracer.phaseDuration) {
-    tracer.opacity = 1
-    tracer.phase = "visible"
-    tracer.phaseAge = 0
-  }
 }
 
 function createShader(
@@ -299,7 +224,9 @@ function createProgram(gl: WebGL2RenderingContext) {
   return program
 }
 
-function createBackRenderer(canvas: HTMLCanvasElement) {
+export function createSpectralTracerController(
+  canvas: HTMLCanvasElement,
+): SpectralTracerController | null {
   const gl = canvas.getContext("webgl2", {
     alpha: true,
     antialias: true,
@@ -319,11 +246,21 @@ function createBackRenderer(canvas: HTMLCanvasElement) {
     return null
   }
 
+  const stateData = new Float32Array(SPECTRAL_TRACER_CAPACITY * STATE_COMPONENTS)
+  for (let index = 0; index < SPECTRAL_TRACER_CAPACITY; index++) {
+    const parameter = spectralParameterAt(index)
+    const offset = index * STATE_COMPONENTS
+    stateData[offset] = parameter.u
+    stateData[offset + 1] = parameter.v
+    stateData[offset + 2] = 1
+    stateData[offset + 3] = hash(index + 1, 41)
+  }
+
   gl.bindVertexArray(vertexArray)
   gl.bindBuffer(gl.ARRAY_BUFFER, stateBuffer)
-  gl.bufferData(gl.ARRAY_BUFFER, SPECTRAL_TRACER_CAPACITY * 2 * 4, gl.DYNAMIC_DRAW)
+  gl.bufferData(gl.ARRAY_BUFFER, stateData, gl.STATIC_DRAW)
   gl.enableVertexAttribArray(0)
-  gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0)
+  gl.vertexAttribPointer(0, STATE_COMPONENTS, gl.FLOAT, false, 0, 0)
   gl.vertexAttribDivisor(0, 1)
   gl.bindVertexArray(null)
   gl.enable(gl.BLEND)
@@ -331,11 +268,16 @@ function createBackRenderer(canvas: HTMLCanvasElement) {
   const uniforms = {
     alpha: gl.getUniformLocation(program, "uAlpha"),
     theme: gl.getUniformLocation(program, "uTheme"),
+    time: gl.getUniformLocation(program, "uTime"),
+    layer: gl.getUniformLocation(program, "uLayer"),
+    glow: gl.getUniformLocation(program, "uGlow"),
+    trailSegments: gl.getUniformLocation(program, "uTrailSegments"),
+    fieldScale: gl.getUniformLocation(program, "uFieldScale"),
     lambda: gl.getUniformLocation(program, "uLambda[0]"),
+    modeCount: gl.getUniformLocation(program, "uModeCount"),
     resolution: gl.getUniformLocation(program, "uResolution"),
     obstacles: gl.getUniformLocation(program, "uObstacles[0]"),
     obstacleCount: gl.getUniformLocation(program, "uObstacleCount"),
-    pass: gl.getUniformLocation(program, "uPass"),
   }
 
   const resize = (width: number, height: number, pixelRatio: number) => {
@@ -346,45 +288,67 @@ function createBackRenderer(canvas: HTMLCanvasElement) {
     gl.viewport(0, 0, canvas.width, canvas.height)
   }
 
-  const render = (
-    states: TracerState[],
-    backgroundCount: number,
-    alpha: number,
-    theme: number,
-    width: number,
-    height: number,
-    obstacles: TracerObstacle[],
-  ) => {
+  const render = ({
+    alpha,
+    theme,
+    time,
+    backgroundCount,
+    foregroundCount,
+    trailSamples,
+    modeCount,
+    width,
+    height,
+    obstacles,
+  }: SpectralTracerFrame) => {
     gl.clearColor(0, 0, 0, 0)
     gl.clear(gl.COLOR_BUFFER_BIT)
-    if (alpha <= 0.001 || backgroundCount <= 0) return
+    if (alpha <= 0.001) return
 
-    const stateData = new Float32Array(backgroundCount * 2)
-    for (let index = 0; index < backgroundCount; index++) {
-      stateData[index * 2] = states[index].orbitTime
-      stateData[index * 2 + 1] = states[index].opacity
-    }
+    const backCount = Math.min(backgroundCount, SPECTRAL_TRACER_CAPACITY)
+    const frontCount = Math.min(
+      foregroundCount,
+      Math.max(0, SPECTRAL_TRACER_CAPACITY - SPECTRAL_TRACER_BACKGROUND),
+    )
+    const segments = Math.max(1, Math.min(MAX_TRAIL_SEGMENTS, trailSamples - 1))
     const obstacleData = new Float32Array(SPECTRAL_TRACER_MAX_OBSTACLES * 4)
     obstacles.slice(0, SPECTRAL_TRACER_MAX_OBSTACLES).forEach((obstacle, index) => {
       obstacleData.set([obstacle.left, obstacle.top, obstacle.right, obstacle.bottom], index * 4)
     })
 
     gl.useProgram(program)
-    gl.bindBuffer(gl.ARRAY_BUFFER, stateBuffer)
-    gl.bufferSubData(gl.ARRAY_BUFFER, 0, stateData)
     gl.uniform1f(uniforms.alpha, alpha)
     gl.uniform1f(uniforms.theme, theme)
-    gl.uniform1fv(uniforms.lambda, ORBIT_LAMBDAS)
+    gl.uniform1f(uniforms.time, time)
+    gl.uniform1f(uniforms.trailSegments, segments)
+    gl.uniform1f(uniforms.fieldScale, Math.min(118, Math.max(64, Math.min(width, height) * 0.105)))
+    gl.uniform1fv(uniforms.lambda, SPECTRAL_LAMBDAS)
+    gl.uniform1i(uniforms.modeCount, Math.min(6, Math.max(1, modeCount)))
     gl.uniform2f(uniforms.resolution, width, height)
     gl.uniform4fv(uniforms.obstacles, obstacleData)
     gl.uniform1i(uniforms.obstacleCount, Math.min(obstacles.length, SPECTRAL_TRACER_MAX_OBSTACLES))
     gl.bindVertexArray(vertexArray)
-    gl.blendFunc(gl.SRC_ALPHA, gl.ONE)
-    gl.uniform1f(uniforms.pass, 1)
-    gl.drawArraysInstanced(gl.TRIANGLES, 0, TRAIL_SEGMENTS * 6, backgroundCount)
-    gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA)
-    gl.uniform1f(uniforms.pass, 0)
-    gl.drawArraysInstanced(gl.TRIANGLES, 0, TRAIL_SEGMENTS * 6, backgroundCount)
+
+    const drawPass = (offset: number, count: number, layer: number, glow: number) => {
+      if (count <= 0) return
+      gl.bindBuffer(gl.ARRAY_BUFFER, stateBuffer)
+      gl.vertexAttribPointer(
+        0,
+        STATE_COMPONENTS,
+        gl.FLOAT,
+        false,
+        0,
+        offset * STATE_COMPONENTS * Float32Array.BYTES_PER_ELEMENT,
+      )
+      gl.uniform1f(uniforms.layer, layer)
+      gl.uniform1f(uniforms.glow, glow)
+      gl.blendFunc(gl.SRC_ALPHA, glow > 0.5 ? gl.ONE : gl.ONE_MINUS_SRC_ALPHA)
+      gl.drawArraysInstanced(gl.TRIANGLES, 0, segments * 6, count)
+    }
+
+    drawPass(0, backCount, 0, 1)
+    drawPass(0, backCount, 0, 0)
+    drawPass(SPECTRAL_TRACER_BACKGROUND, frontCount, 1, 1)
+    drawPass(SPECTRAL_TRACER_BACKGROUND, frontCount, 1, 0)
     gl.bindVertexArray(null)
   }
 
@@ -398,178 +362,22 @@ function createBackRenderer(canvas: HTMLCanvasElement) {
   return { resize, render, destroy }
 }
 
-function tracerStyle(seed: number, theme: number) {
-  const styleRoll = hash(seed, 97)
-  const widthRoll = hash(seed, 101)
-  const alphaRoll = styleRoll >= 0.95 ? 1 : hash(seed, 103)
-  const bright = styleRoll >= 0.8
-  const dayCore = bright ? 2.4 + widthRoll * 0.6 : 1.5 + widthRoll * 0.7
-  const nightCore = bright ? 2.2 + widthRoll * 0.6 : 1.4 + widthRoll * 0.6
-  const colors = [
-    [
-      [67, 143, 208],
-      [81, 135, 208],
-      [102, 125, 216],
-    ],
-    [
-      [134, 201, 255],
-      [163, 189, 255],
-      [182, 174, 255],
-    ],
-  ]
-  const colorIndex = styleRoll < 0.8 ? 0 : styleRoll < 0.95 ? 1 : 2
-  const day = colors[0][colorIndex]
-  const night = colors[1][colorIndex]
-
-  return {
-    color: day.map((channel, index) => Math.round(channel + (night[index] - channel) * theme)),
-    coreWidth: styleRoll >= 0.95 ? 3 - theme * 0.2 : dayCore + (nightCore - dayCore) * theme,
-    glowWidth: 3.5 + widthRoll * 2 + theme * 0.5,
-    coreAlpha: 0.38 + alphaRoll * 0.2 + theme * 0.1,
-    glowAlpha: 0.04 + alphaRoll * 0.04 + theme * (0.03 + alphaRoll * 0.01),
-  }
-}
-
-export function createSpectralTracerController(
-  backCanvas: HTMLCanvasElement,
-  frontCanvas: HTMLCanvasElement,
-): SpectralTracerController | null {
-  const frontContext = frontCanvas.getContext("2d", { alpha: true })
-  const backRenderer = createBackRenderer(backCanvas)
-  if (!frontContext && !backRenderer) return null
-
-  const states = Array.from({ length: SPECTRAL_TRACER_CAPACITY }, (_, index) => createTracer(index))
-
-  const resize = (width: number, height: number, pixelRatio: number) => {
-    backRenderer?.resize(width, height, pixelRatio)
-    if (!frontContext) return
-    frontCanvas.width = Math.max(1, Math.floor(width * pixelRatio))
-    frontCanvas.height = Math.max(1, Math.floor(height * pixelRatio))
-    frontCanvas.style.width = width + "px"
-    frontCanvas.style.height = height + "px"
-    frontContext.setTransform(pixelRatio, 0, 0, pixelRatio, 0, 0)
-  }
-
-  const render = ({
-    deltaSeconds,
-    alpha,
-    theme,
-    totalCount,
-    foregroundCount,
-    width,
-    height,
-    obstacles,
-  }: SpectralTracerFrame) => {
-    const activeCount = Math.min(totalCount, SPECTRAL_TRACER_CAPACITY)
-    const frontCount = Math.min(foregroundCount, activeCount)
-    const backgroundCount = activeCount - frontCount
-    for (let index = 0; index < activeCount; index++) {
-      advanceTracer(states[index], deltaSeconds)
-    }
-
-    backRenderer?.render(states, backgroundCount, alpha, theme, width, height, obstacles)
-    if (!frontContext) return
-    frontContext.clearRect(0, 0, width, height)
-    const frontAlpha = smoothstep((alpha - 0.58) / 0.42)
-    if (frontAlpha <= 0.001) return
-
-    frontContext.lineCap = "round"
-    const trails: Array<{
-      tracer: TracerState
-      points: OrbitPoint[]
-      style: ReturnType<typeof tracerStyle>
-      alpha: number
-    }> = []
-    for (let index = backgroundCount; index < activeCount; index++) {
-      const tracer = states[index]
-      if (tracer.opacity <= 0.001) continue
-      const points = Array.from({ length: TRAIL_SAMPLES }, (_, sample) =>
-        viewportTransform(
-          sampleOrbit(tracer.orbitTime - (sample / TRAIL_SEGMENTS) * tracer.trailDuration),
-          width,
-          height,
-        ),
-      )
-      trails.push({
-        tracer,
-        points,
-        style: tracerStyle(tracer.seed, theme),
-        alpha: frontAlpha * tracer.opacity,
-      })
-    }
-
-    // Clip the actual stroke, including its glow, rather than classifying the head.
-    const componentClip = new Path2D()
-    const backgroundClips = obstacles.map((obstacle) => {
-      const rectWidth = obstacle.right - obstacle.left
-      const rectHeight = obstacle.bottom - obstacle.top
-      componentClip.rect(obstacle.left, obstacle.top, rectWidth, rectHeight)
-      const outside = new Path2D()
-      outside.rect(0, 0, width, height)
-      outside.rect(obstacle.left, obstacle.top, rectWidth, rectHeight)
-      return outside
-    })
-    const gray = Math.round(128 + 48 * theme)
-    const drawTrails = (glow: boolean, overComponent: boolean) => {
-      if (overComponent && !obstacles.length) return
-      frontContext.save()
-      if (overComponent) {
-        frontContext.clip(componentClip)
-      } else {
-        // Intersect complements so overlapping components remain one masked region.
-        for (const outside of backgroundClips) frontContext.clip(outside, "evenodd")
-      }
-      frontContext.globalCompositeOperation = glow ? "lighter" : "source-over"
-      for (const { points, style, alpha: tracerAlpha } of trails) {
-        frontContext.strokeStyle = overComponent
-          ? `rgb(${gray}, ${gray}, ${gray})`
-          : `rgb(${style.color[0]}, ${style.color[1]}, ${style.color[2]})`
-        frontContext.lineWidth = glow ? style.glowWidth : style.coreWidth
-        for (let segment = 0; segment < points.length - 1; segment++) {
-          const flowAlpha = Math.pow(1 - segment / TRAIL_SEGMENTS, 1.2)
-          frontContext.globalAlpha =
-            tracerAlpha *
-            flowAlpha *
-            (glow ? style.glowAlpha : style.coreAlpha) *
-            (overComponent ? 0.72 : 1)
-          frontContext.beginPath()
-          frontContext.moveTo(points[segment].x, points[segment].y)
-          frontContext.lineTo(points[segment + 1].x, points[segment + 1].y)
-          frontContext.stroke()
-        }
-      }
-      frontContext.restore()
-    }
-
-    drawTrails(true, false)
-    drawTrails(true, true)
-    drawTrails(false, false)
-    drawTrails(false, true)
-    frontContext.globalCompositeOperation = "source-over"
-    frontContext.globalAlpha = 1
-  }
-
-  const destroy = () => {
-    backRenderer?.destroy()
-    frontContext?.clearRect(0, 0, frontCanvas.width, frontCanvas.height)
-  }
-
-  return { resize, render, destroy }
-}
-
-export function SpectralTracerLayer({ backCanvasRef, frontCanvasRef }: SpectralTracerLayerProps) {
+export function SpectralTracerLayer({
+  fieldCanvasRef,
+  interactionCanvasRef,
+}: SpectralTracerLayerProps) {
   return (
     <>
       <canvas
-        ref={backCanvasRef}
-        className="pointer-events-none fixed inset-0 z-[3] hidden h-full w-full md:block"
-        data-field-layer="back"
+        ref={fieldCanvasRef}
+        className="pointer-events-none fixed inset-0 z-20 hidden h-full w-full md:block"
+        data-field-layer="spectral-field"
         aria-hidden="true"
       />
       <canvas
-        ref={frontCanvasRef}
-        className="pointer-events-none fixed inset-0 z-20 hidden h-full w-full md:block"
-        data-field-layer="front"
+        ref={interactionCanvasRef}
+        className="pointer-events-none fixed inset-0 z-[21] hidden h-full w-full md:block"
+        data-field-layer="interaction"
         aria-hidden="true"
       />
     </>

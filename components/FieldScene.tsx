@@ -5,32 +5,29 @@ import { siteConfig } from "../siteConfig"
 import { useFieldMode } from "./FieldModeProvider"
 import { useTheme } from "./ThemeProvider"
 import {
+  SPECTRAL_TRACER_BACKGROUND,
   SPECTRAL_TRACER_FOREGROUND,
   SPECTRAL_TRACER_MAX_OBSTACLES,
-  SPECTRAL_TRACER_TARGET,
   SpectralTracerLayer,
   createSpectralTracerController,
   type TracerObstacle,
 } from "./field/SpectralTracerLayer"
-import { ORBIT_LAMBDAS } from "./field/spectralOrbit"
+import {
+  SPECTRAL_PLAYBACK_RATE,
+  sampleSpectralFamily,
+  spectralParameterAt,
+} from "./field/spectralField"
 
 const TAU = Math.PI * 2
 const PHI = (1 + Math.sqrt(5)) / 2
 const NORMAL_FRAME_MS = 1000 / 30
 const NORMAL_PIXEL_RATIO = 1.25
-const LAMBDAS = ORBIT_LAMBDAS
 const EFFECT_COUNTS = {
   sakura: 40,
   fireflies: 50,
   grass: 150,
   danmaku: 15,
 } as const
-
-type Spectrum = {
-  amplitudes: number[]
-  cosPhases: number[]
-  sinPhases: number[]
-}
 
 type Ripple = {
   x: number
@@ -41,26 +38,63 @@ type Ripple = {
 }
 
 type FieldQuality = {
+  backgroundCount: number
   foregroundCount: number
-  tracerRatio: number
   pixelRatio: number
   modeCount: number
+  trailSamples: number
   frameMs: number
 }
 
 const FIELD_QUALITY: FieldQuality[] = [
   {
+    backgroundCount: SPECTRAL_TRACER_BACKGROUND,
     foregroundCount: SPECTRAL_TRACER_FOREGROUND,
-    tracerRatio: 1,
     pixelRatio: 1.5,
     modeCount: 6,
+    trailSamples: 8,
     frameMs: 1000 / 60,
   },
-  { foregroundCount: 48, tracerRatio: 1, pixelRatio: 1.5, modeCount: 6, frameMs: 1000 / 60 },
-  { foregroundCount: 48, tracerRatio: 0.68, pixelRatio: 1.5, modeCount: 6, frameMs: 1000 / 60 },
-  { foregroundCount: 48, tracerRatio: 0.68, pixelRatio: 1, modeCount: 6, frameMs: 1000 / 60 },
-  { foregroundCount: 48, tracerRatio: 0.68, pixelRatio: 1, modeCount: 4, frameMs: 1000 / 45 },
-  { foregroundCount: 32, tracerRatio: 0.55, pixelRatio: 1, modeCount: 4, frameMs: 1000 / 30 },
+  {
+    backgroundCount: 2800,
+    foregroundCount: 100,
+    pixelRatio: 1.5,
+    modeCount: 6,
+    trailSamples: 8,
+    frameMs: 1000 / 60,
+  },
+  {
+    backgroundCount: 2200,
+    foregroundCount: 80,
+    pixelRatio: 1.25,
+    modeCount: 6,
+    trailSamples: 8,
+    frameMs: 1000 / 60,
+  },
+  {
+    backgroundCount: 1800,
+    foregroundCount: 64,
+    pixelRatio: 1,
+    modeCount: 6,
+    trailSamples: 7,
+    frameMs: 1000 / 60,
+  },
+  {
+    backgroundCount: 1400,
+    foregroundCount: 48,
+    pixelRatio: 1,
+    modeCount: 5,
+    trailSamples: 6,
+    frameMs: 1000 / 45,
+  },
+  {
+    backgroundCount: 900,
+    foregroundCount: 32,
+    pixelRatio: 1,
+    modeCount: 4,
+    trailSamples: 6,
+    frameMs: 1000 / 30,
+  },
 ]
 function hash(index: number, seed: number) {
   const value = Math.sin(index * 12.9898 + seed * 78.233) * 43758.5453
@@ -90,55 +124,6 @@ function sideWeightedPosition(index: number, seed: number) {
   return position + (edgePosition - position) * 0.28
 }
 
-function createSpectrum(index: number, seed: number, modeCount: number, spatialPhase = 0) {
-  const amplitudes = Array.from({ length: modeCount }, (_, mode) => {
-    const envelope = Math.pow(mode + 1.5, -1.4)
-    return envelope * (0.72 + hash(index * 19 + mode, seed) * 0.56)
-  })
-  const amplitudeSum = amplitudes.reduce((sum, amplitude) => sum + amplitude, 0)
-  const phases = Array.from(
-    { length: modeCount },
-    (_, mode) => hash(index * 23 + mode, seed + 7) * TAU + spatialPhase * (mode + 1),
-  )
-
-  return {
-    amplitudes: amplitudes.map((amplitude) => amplitude / amplitudeSum),
-    cosPhases: phases.map(Math.cos),
-    sinPhases: phases.map(Math.sin),
-  }
-}
-
-function sampleSpectrum(
-  spectrum: Spectrum,
-  cosines: number[],
-  sines: number[],
-  modeCount: number,
-  phaseBias = 0,
-) {
-  let x = 0
-  let y = 0
-  let velocityX = 0
-  let velocityY = 0
-  const biasCosine = Math.cos(phaseBias)
-  const biasSine = Math.sin(phaseBias)
-
-  for (let mode = 0; mode < Math.min(modeCount, spectrum.amplitudes.length); mode++) {
-    const phaseCosine =
-      cosines[mode] * spectrum.cosPhases[mode] - sines[mode] * spectrum.sinPhases[mode]
-    const phaseSine =
-      sines[mode] * spectrum.cosPhases[mode] + cosines[mode] * spectrum.sinPhases[mode]
-    const cosine = phaseCosine * biasCosine - phaseSine * biasSine
-    const sine = phaseSine * biasCosine + phaseCosine * biasSine
-    const amplitude = spectrum.amplitudes[mode]
-    x += amplitude * cosine
-    y += amplitude * sine
-    velocityX -= amplitude * LAMBDAS[mode] * sine
-    velocityY += amplitude * LAMBDAS[mode] * cosine
-  }
-
-  return { x, y, velocityX, velocityY }
-}
-
 function createFireflySprite() {
   const sprite = document.createElement("canvas")
   const size = 48
@@ -160,7 +145,7 @@ function createFireflySprite() {
 export default function FieldScene() {
   const speciesCanvasRef = useRef<HTMLCanvasElement>(null)
   const fieldCanvasRef = useRef<HTMLCanvasElement>(null)
-  const frontCanvasRef = useRef<HTMLCanvasElement>(null)
+  const interactionCanvasRef = useRef<HTMLCanvasElement>(null)
   const { isDark } = useTheme()
   const { performanceMode } = useFieldMode()
   const darkRef = useRef(isDark)
@@ -178,12 +163,12 @@ export default function FieldScene() {
   useEffect(() => {
     const speciesCanvas = speciesCanvasRef.current
     const fieldCanvas = fieldCanvasRef.current
-    const frontCanvas = frontCanvasRef.current
-    if (!speciesCanvas || !fieldCanvas || !frontCanvas) return
+    const interactionCanvas = interactionCanvasRef.current
+    if (!speciesCanvas || !fieldCanvas || !interactionCanvas) return
 
     const speciesContext = speciesCanvas.getContext("2d", { alpha: true })
-    const frontContext = frontCanvas.getContext("2d", { alpha: true })
-    if (!speciesContext || !frontContext) return
+    const interactionContext = interactionCanvas.getContext("2d", { alpha: true })
+    if (!speciesContext || !interactionContext) return
 
     const sakura = Array.from({ length: EFFECT_COUNTS.sakura }, (_, index) => ({
       x0: sideWeightedPosition(index, 1),
@@ -204,7 +189,8 @@ export default function FieldScene() {
       xi: hash(index, 16) * TAU,
       size: 7 + hash(index, 17) * 8,
       opacity: 0.38 + hash(index, 18) * 0.32,
-      spectrum: createSpectrum(index, 101, 4),
+      spectralParameter: spectralParameterAt(index + 5000),
+      spectralCoupling: 0.3 + hash(index, 19) * 0.2,
     }))
     const fireflies = Array.from({ length: EFFECT_COUNTS.fireflies }, (_, index) => ({
       x0: 0.04 + sideWeightedPosition(index, 1) * 0.92,
@@ -222,7 +208,8 @@ export default function FieldScene() {
       glowFrequency: 0.5 + hash(index, 13) * 0.65,
       glowPhase: hash(index, 14) * TAU,
       radius: 2.2 + hash(index, 15) * 2.4,
-      spectrum: createSpectrum(index, 202, 4),
+      spectralParameter: spectralParameterAt(index + 6000),
+      spectralCoupling: 0.25 + hash(index, 16) * 0.15,
     }))
     const grass = Array.from({ length: EFFECT_COUNTS.grass }, (_, index) => {
       const x = (index + 0.5 + (hash(index, 1) - 0.5) * 0.55) / EFFECT_COUNTS.grass
@@ -235,7 +222,7 @@ export default function FieldScene() {
         secondaryAmplitude: 0.025 + hash(index, 6) * 0.065,
         phase: hash(index, 7) * TAU,
         opacity: 0.24 + hash(index, 8) * 0.34,
-        spectrum: createSpectrum(index, 303, 3, x * TAU * 2.2),
+        spectralParameter: { u: x, v: 1 },
       }
     })
     const danmaku = siteConfig.danmakuList.length
@@ -286,7 +273,7 @@ export default function FieldScene() {
         FIELD_QUALITY[qualityIndex].pixelRatio,
       )
       resize2dCanvas(speciesCanvas, speciesContext, normalRatio)
-      resize2dCanvas(frontCanvas, frontContext, fieldRatio)
+      resize2dCanvas(interactionCanvas, interactionContext, fieldRatio)
       tracerController?.resize(width, height, fieldRatio)
       lastObstacleSample = -1000
     }
@@ -314,7 +301,7 @@ export default function FieldScene() {
         }))
     }
 
-    const drawSpecies = (time: number, cosines: number[], sines: number[], modeCount: number) => {
+    const drawSpecies = (time: number, spectralTime: number, modeCount: number) => {
       speciesContext.clearRect(0, 0, width, height)
       const fieldAmount = smoothstep(fieldBlend)
 
@@ -332,18 +319,22 @@ export default function FieldScene() {
       const daylight = 1 - themeBlend
       if (daylight > 0.001) {
         for (const petal of sakura) {
-          const spectral = sampleSpectrum(petal.spectrum, cosines, sines, Math.min(4, modeCount))
+          const spectral = sampleSpectralFamily(
+            petal.spectralParameter,
+            spectralTime,
+            Math.min(4, modeCount),
+          )
           const margin = petal.size * 2
           const normalX =
             petal.x0 * width +
             petal.wind * time +
             petal.a * Math.sin(petal.w * time + petal.phi) +
             petal.b * Math.sin(PHI * petal.w * time + petal.psi)
-          const fieldX = petal.x0 * width + spectral.x * (42 + petal.a)
+          const fieldX = normalX + spectral.x * (42 + petal.a) * petal.spectralCoupling
           const x =
             wrap(normalX + (fieldX - normalX) * fieldAmount + margin, width + margin * 2) - margin
           const normalY = petal.y0 * height + petal.fallSpeed * time
-          const fieldY = normalY + spectral.y * 18
+          const fieldY = normalY + spectral.y * 18 * petal.spectralCoupling
           const y =
             wrap(normalY + (fieldY - normalY) * fieldAmount + margin, height + margin * 2) - margin
           const angle =
@@ -381,7 +372,11 @@ export default function FieldScene() {
 
       if (themeBlend > 0.001) {
         for (const firefly of fireflies) {
-          const spectral = sampleSpectrum(firefly.spectrum, cosines, sines, Math.min(4, modeCount))
+          const spectral = sampleSpectralFamily(
+            firefly.spectralParameter,
+            spectralTime,
+            Math.min(4, modeCount),
+          )
           const normalX =
             firefly.x0 * width +
             firefly.a * Math.sin(firefly.wx * time + firefly.phi) +
@@ -390,8 +385,8 @@ export default function FieldScene() {
             firefly.y0 * height +
             firefly.c * Math.sin(firefly.wy * time + firefly.eta) +
             firefly.d * Math.sin(Math.sqrt(3) * firefly.wy * time + firefly.xi)
-          const fieldX = firefly.x0 * width + spectral.x * (36 + firefly.a)
-          const fieldY = firefly.y0 * height + spectral.y * (32 + firefly.c)
+          const fieldX = normalX + spectral.x * (36 + firefly.a) * firefly.spectralCoupling
+          const fieldY = normalY + spectral.y * (32 + firefly.c) * firefly.spectralCoupling
           const x = normalX + (fieldX - normalX) * fieldAmount
           const y = normalY + (fieldY - normalY) * fieldAmount
           const breathe = 0.5 + 0.5 * Math.sin(firefly.glowFrequency * time + firefly.glowPhase)
@@ -433,8 +428,12 @@ export default function FieldScene() {
         )
         const normalAngle =
           blade.baseAngle + gust * (blade.amplitude * wave1 + blade.secondaryAmplitude * wave2)
-        const spectral = sampleSpectrum(blade.spectrum, cosines, sines, Math.min(3, modeCount))
-        const fieldAngle = blade.baseAngle + spectral.x * (blade.amplitude * 1.15)
+        const spectral = sampleSpectralFamily(
+          blade.spectralParameter,
+          spectralTime,
+          Math.min(3, modeCount),
+        )
+        const fieldAngle = blade.baseAngle + spectral.velocityX * (blade.amplitude * 0.55)
         const angle = normalAngle + (fieldAngle - normalAngle) * fieldAmount
         const tipX = x + Math.sin(angle) * blade.height
         const tipY = height - Math.cos(angle) * blade.height
@@ -455,7 +454,8 @@ export default function FieldScene() {
     }
 
     const drawInteractions = () => {
-      frontContext.globalCompositeOperation = "source-over"
+      interactionContext.clearRect(0, 0, width, height)
+      interactionContext.globalCompositeOperation = "source-over"
       for (let index = ripples.length - 1; index >= 0; index--) {
         const ripple = ripples[index]
         ripple.radius += ripple.velocity
@@ -465,17 +465,17 @@ export default function FieldScene() {
           ripples.splice(index, 1)
           continue
         }
-        frontContext.globalAlpha = ripple.opacity
-        frontContext.strokeStyle = "rgb(129, 140, 248)"
-        frontContext.lineWidth = 2
-        frontContext.shadowBlur = 15
-        frontContext.shadowColor = "rgba(129, 140, 248, 0.5)"
-        frontContext.beginPath()
-        frontContext.arc(ripple.x, ripple.y, ripple.radius, 0, TAU)
-        frontContext.stroke()
+        interactionContext.globalAlpha = ripple.opacity
+        interactionContext.strokeStyle = "rgb(129, 140, 248)"
+        interactionContext.lineWidth = 2
+        interactionContext.shadowBlur = 15
+        interactionContext.shadowColor = "rgba(129, 140, 248, 0.5)"
+        interactionContext.beginPath()
+        interactionContext.arc(ripple.x, ripple.y, ripple.radius, 0, TAU)
+        interactionContext.stroke()
       }
-      frontContext.shadowBlur = 0
-      frontContext.globalAlpha = 1
+      interactionContext.shadowBlur = 0
+      interactionContext.globalAlpha = 1
     }
 
     const renderFrame = (now: number, force = false) => {
@@ -500,15 +500,12 @@ export default function FieldScene() {
       }
 
       const time = (now - startTime) / 1000
-      const cosines = LAMBDAS.map((lambda) => Math.cos(lambda * time))
-      const sines = LAMBDAS.map((lambda) => Math.sin(lambda * time))
+      const spectralTime = time * SPECTRAL_PLAYBACK_RATE
       sampleObstacles(now)
-      drawSpecies(time, cosines, sines, quality.modeCount)
+      drawSpecies(time, spectralTime, quality.modeCount)
 
-      const totalTracerCount = Math.round(SPECTRAL_TRACER_TARGET * quality.tracerRatio)
-      const foregroundCount = Math.min(quality.foregroundCount, totalTracerCount)
       if (fieldBlend > 0.001 && !tracerController) {
-        tracerController = createSpectralTracerController(fieldCanvas, frontCanvas)
+        tracerController = createSpectralTracerController(fieldCanvas)
         tracerController?.resize(
           width,
           height,
@@ -517,17 +514,17 @@ export default function FieldScene() {
       }
       if (tracerController) {
         tracerController.render({
-          deltaSeconds,
           alpha: smoothstep(fieldBlend),
           theme: themeBlend,
-          totalCount: totalTracerCount,
-          foregroundCount,
+          time: spectralTime,
+          backgroundCount: quality.backgroundCount,
+          foregroundCount: quality.foregroundCount,
+          trailSamples: quality.trailSamples,
+          modeCount: quality.modeCount,
           width,
           height,
           obstacles,
         })
-      } else {
-        frontContext.clearRect(0, 0, width, height)
       }
 
       drawInteractions()
@@ -568,7 +565,7 @@ export default function FieldScene() {
       if (!desktopQuery.matches) {
         speciesCanvas.width = 1
         fieldCanvas.width = 1
-        frontCanvas.width = 1
+        interactionCanvas.width = 1
         return
       }
       resizeCanvases()
@@ -633,7 +630,10 @@ export default function FieldScene() {
         data-field-layer="species"
         aria-hidden="true"
       />
-      <SpectralTracerLayer backCanvasRef={fieldCanvasRef} frontCanvasRef={frontCanvasRef} />
+      <SpectralTracerLayer
+        fieldCanvasRef={fieldCanvasRef}
+        interactionCanvasRef={interactionCanvasRef}
+      />
     </>
   )
 }

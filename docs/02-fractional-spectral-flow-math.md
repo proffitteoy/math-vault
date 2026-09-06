@@ -1,1058 +1,432 @@
-# Fractional Spectral Flow 数学轨迹模型
+# Fractional Spectral Field 数学模型
 
-> 目标：给网站动画定义一套真正来自泛函分析 / 算子理论的长期运动规律。  
-> 选定方案：Hilbert 空间上的 fractional unitary flow，并通过有界线性观测得到二维轨迹。
+本文只定义 Field Mode 的数学状态、二维参数化观测与物种耦合。视觉层不能引入另一套动力系统。
 
----
+## 1. Hilbert 空间与 fractional operator
 
-## 1. Hilbert 空间
-
-取
+取：
 
 ```math
-H=L^2(S^1).
+mathcal H=L^2(mathbb T),
+qquad
+mathbb T=mathbb R/2pimathbb Z.
 ```
 
-使用标准 Fourier 基：
-
-```math
-e_m(\theta)=e^{im\theta},
-\qquad m\in\mathbb Z.
-```
-
-圆周上的 Laplace 算子满足
+在 Fourier basis `e_m(x)=e^{imx}` 上：
 
 ```math
 -\Delta e_m=m^2e_m.
 ```
 
-因此 Fourier 基也是 `-Δ` 的特征基。
-
----
-
-## 2. Fractional operator
-
-定义
-
-```math
-A_\alpha=(-\Delta)^{\alpha/2}.
-```
-
-通过谱演算：
-
-```math
-A_\alpha e_m
-=
-|m|^\alpha e_m.
-```
-
-本项目选
-
-```math
-\alpha=\frac32.
-```
-
-于是
+定义：
 
 ```math
 A=(-\Delta)^{3/4},
 ```
 
-且
+因此：
 
 ```math
-Ae_m
+Ae_m=|m|^{3/2}e_m.
+```
+
+加入视觉时间尺度 `\beta=0.18` 后，选定 mode 的频率为：
+
+```math
+lambda_j=\beta m_j^{3/2},
+qquad
+m=(2,3,5,7,11,13).
+```
+
+## 2. 一参数酉群
+
+演化由：
+
+```math
+U(t)=e^{itA}
+```
+
+给出。对：
+
+```math
+\psi_0=\sum_j a_je_{m_j},
+```
+
+有：
+
+```math
+U(t)\psi_0
 =
-|m|^{3/2}e_m.
+\sum_j a_je^{i|m_j|^{3/2}t}e_{m_j}.
 ```
 
-这一步是整个模型的核心。
+这是保范数、可逆、无耗散的准周期演化。Field Mode 不把它解释为 Navier–Stokes 流体。
 
-它不是人为规定“第 m 个正弦波频率等于某个数”，而是从自伴算子的 functional calculus 得到。
+## 3. 二维参数化线性观测
 
----
-
-## 3. 一参数酉群
-
-因为 `A` 是自伴算子，可定义
+旧实现只使用一个固定二维观测，得到一条轨道 `\gamma(t)`。当前实现改用由空间参数标记的一族有界线性观测：
 
 ```math
-U(t)=e^{itA}.
+a=(u,v)\in[0,1]^2,
 ```
-
-`U(t)` 是 Hilbert 空间上的一参数酉群。
-
-满足：
 
 ```math
-U(t+s)=U(t)U(s),
-```
-
-以及
-
-```math
-\lVert U(t)f\rVert_H=\lVert f\rVert_H.
-```
-
-因此轨道不会像 dissipative flow 那样自动衰减到零。
-
-这正适合作为长期网页动画：
-
-- 不需要重新“注入能量”；
-- 不会自然吸到一个 attractor；
-- 不会因为时间增长而爆炸；
-- 可以永久运行。
-
----
-
-## 4. Fourier 展开
-
-令初始态
-
-```math
-f
-=
-\sum_m a_me_m.
-```
-
-则
-
-```math
-U(t)f
-=
-\sum_m
-a_m e^{i|m|^{3/2}t}e_m.
-```
-
-每个谱分量只发生 phase rotation。
-
-因此系统的“运动”本质是：
-
-```text
-Hilbert-space vector
-    ↓
-each spectral coordinate rotates
-    ↓
-the whole state moves on an infinite-dimensional torus
-```
-
-实际网站只保留有限个 mode。
-
----
-
-## 5. 从无限维状态到二维轨迹
-
-屏幕只能显示二维位置。
-
-取一个有界线性泛函
-
-```math
-\ell:H\to\mathbb C.
-```
-
-定义
-
-```math
-z(t)
-=
-\ell(U(t)f).
-```
-
-写成有限谱展开：
-
-```math
-\boxed{
-z(t)
+\Gamma(a,t)
 =
 \sum_{j=1}^{N}
-c_j
-e^{i\lambda_j t}
-}
+c_j(a)e^{i\lambda_jt}.
 ```
 
-其中
+对每个固定的 `a`，`\Gamma(a,t)` 仍是同一个 fractional spectral evolution 的二维线性观测。不同 tracer 不拥有私有频率或私有时钟。
+
+写成：
 
 ```math
-\lambda_j
+c_j(a)=A_j(a)e^{i\phi_j(a)}.
+```
+
+实现使用：
+
+```math
+A_j(u,v)
 =
-\beta m_j^{3/2}.
-```
-
-`β > 0` 是全局时间尺度。
-
-屏幕坐标：
-
-```math
-x(t)=\Re z(t),
+\bar A_j
+\left[
+1+\varepsilon_{A,j}
+\sin\!\left(
+2\pi(k_{x,j}u+k_{y,j}v)+\eta_j
+\right)
+\right],
 ```
 
 ```math
-y(t)=\Im z(t).
+\phi_j(u,v)
+=
+\bar\phi_j
++\varepsilon_{\phi,j}
+\sin\!\left(
+2\pi(p_{x,j}u+p_{y,j}v)+\xi_j
+\right).
 ```
 
-因此二维轨迹不是直接规定出来的。
-
-它是：
+基础 amplitude envelope 为：
 
 ```text
-unitary orbit
-    ↓
-bounded linear observation
-    ↓
-complex scalar
-    ↓
-2D position
+[0.31, 0.24, 0.18, 0.13, 0.09, 0.06]
 ```
 
----
-
-## 6. 推荐 mode indices
-
-推荐使用不同 square-free part 的 mode：
+基础 phase 为：
 
 ```text
-m = 2, 3, 5, 7, 11, 13, 17, 19
+[0.31, 2.17, 4.02, 5.41, 1.24, 3.52]
 ```
 
-原因：
+幅度调制随 mode 从 `0.08` 增到 `0.27`，相位调制从 `0.16` 墐到 `0.78`。低 mode 控制大尺度相干，高 mode 提供细丝、折返与局部干涉。
+
+## 4. 参数连续性
+
+`A_j` 与 `\phi_j` 都是参数空间上的光滑函数。因此对相邻参数 `a'=a+\delta a`：
 
 ```math
-\lambda_m
+\Gamma(a',t)-\Gamma(a,t)=O(|\delta a|).
+```
+
+速度为解析导数：
+
+```math
+V(a,t)
 =
-m^{3/2}
+\partial_t\Gamma(a,t)
 =
-m\sqrt m.
+i\sum_j\lambda_jc_j(a)e^{i\lambda_jt}.
 ```
 
-这些频率之间通常不存在简单整数比例。
+所以相邻 tracer 的位置、速度、局部切向与曲率连续变化。filament、arc、fold 和 vortex-like loop 来自谱干涉，不来自噪声向量场。
 
-因此有限维 phase vector
+## 5. 有界性
+
+对每个固定 `a`：
 
 ```math
-(
-e^{i\lambda_1t},
-\dots,
-e^{i\lambda_Nt}
-)
+|\Gamma(a,t)|
+\le
+\sum_j|c_j(a)|.
 ```
 
-会产生长期 quasi-periodic motion。
+由于参数域紧且 `c_j(a)` 连续，整个轨道族在 `[0,1]^2\times\mathbb R` 上一致有界。不需要位置 clamp、反弹或吸引子。
 
-视觉上：
+## 6. 确定性空间参数
 
-- 短时间有明显局部规律；
-- 中期不会机械闭合；
-- 长时间会不断出现新的相位组合；
-- 不需要随机游走。
-
----
-
-## 7. 为什么选 α = 3/2
-
-若
+Tracer 参数通过二维 R2 低差异序列生成。实现使用 generalized golden ratio：
 
 ```math
-\alpha=1,
+g^3=g+1,
+qquad
+g\approx1.324717957,
 ```
 
-频率是整数阶：
-
 ```math
-\lambda_m=m.
+u_k=\operatorname{frac}\left(\frac12+\frac{k+1}{g}\right),
+qquad
+v_k=\operatorname{frac}\left(\frac12+\frac{k+1}{g^2}\right).
 ```
 
-过于接近普通 Fourier / epicycle。
+这给出 deterministic、无运行时随机、无规则直角网格的二维覆盖。参数在 tracer 生命周期内保持固定。
 
-若
+## 7. Viewport 映射
+
+基础位置直接覆盖屏幕：
 
 ```math
-\alpha=2,
+X_0(a)
+=
+\begin{pmatrix}
+Wu\\
+Hv
+\end{pmatrix}.
 ```
 
-得到经典 Schrödinger spectrum：
+谱位移为：
 
 ```math
-\lambda_m=m^2.
+D(a,t)
+=
+s
+\begin{pmatrix}
+\Re\Gamma(a,t)\\
+\Im\Gamma(a,t)
+\end{pmatrix}.
 ```
 
-理论非常经典，但大量 mode 之间仍有明显整数结构。
-
-选
+最终位置：
 
 ```math
-\alpha=\frac32
+X(a,t)=X_0(a)+D(a,t).
 ```
 
-则：
+`s` 随较短 viewport 边在 `64–118 px` 内变化。Resize 只改变 `W,H,s`，不重建 `a_k`。
+
+因此当前模型没有：
+
+- `ORBIT_CROP`；
+- 固定 16:9 搜索窗口；
+- `VISIBLE_INTERVALS`；
+- `sampleVisibleTime`；
+- `orbitTime` 或 `intervalIndex`；
+- visible interval reschedule。
+
+## 8. 数学时间
+
+墙钟与数学时间分离：
 
 ```math
-\lambda_m=m^{3/2}.
+t_{\mathrm{math}}
+=
+\rho t_{\mathrm{wall}},
+qquad
+\rho=0.30.
 ```
 
-优势：
+所有 tracer 与 species 在同一帧读取同一个 `t_{\mathrm{math}}`。Theme 切换、quality 降级、resize 和 DOM obstacle 都不能重置时间。
 
-1. 仍然来自标准 fractional functional calculus。
-2. 比普通 Fourier orbit 更少出现明显重复。
-3. 不需要引入随机噪声。
-4. 视觉复杂度足够高。
-5. 计算仍然只是复指数旋转。
+## 9. Tracer tail
 
----
-
-## 8. 系数设计
-
-写
+第 `k` 个 tracer 固定使用 `a_k`。其第 `\ell` 个历史采样点为：
 
 ```math
-c_j=r_je^{i\phi_j}.
+P_{k,\ell}(t)
+=
+X\!\left(
+a_k,
+t-\frac{\ell}{L-1}\rho\Delta_k
+\right),
+qquad
+0\le\ell<L.
 ```
 
 其中：
 
-- `r_j` 控制第 j 个谱 mode 的贡献；
-- `φ_j` 是初始相位。
-
-推荐 amplitude envelope：
-
-```math
-r_j
-=
-C(j+j_0)^{-p},
+```text
+L = 8 at full quality
+Δ_k = 0.08–0.22 wall seconds
 ```
 
-其中推荐
+tail 是同一个参数化轨道的真实历史短弧，不是依据瞬时 velocity 绘制的直线，也没有粒子 head。
+
+全质量状态：
 
 ```text
-p = 1.2–1.8
+3200 background tracers
+120 foreground tracers
+4096 total capacity
+6 spectral modes
 ```
 
-这样：
-
-- 低频决定整体轮廓；
-- 高频增加细节；
-- 高频不会把轨迹撕碎。
-
-归一化：
+每个 GPU instance 只保存：
 
 ```math
-\sum_j r_j=1.
+(u_k,v_k,\alpha_k,\sigma_k),
 ```
 
-或者：
+其中 `\sigma_k` 只决定线宽、透明度、颜色类别与 tail 时长，不能改变频率或谱系数函数。
+
+## 10. WebGL 解析式 instancing
+
+顶点着色器直接计算：
 
 ```math
-\sum_j r_j^2=1.
+X\!\left(a_k,t-\ell\delta t_k\right).
 ```
 
-两种都可以。
+CPU 不逐帧推进粒子位置，也不维护独立 velocity、center、phase array 或 amplitude array。4096 个参数状态只在 renderer 创建时上传一次。
 
-前者更容易直接控制屏幕半径。
+单一 WebGL2 context 按以下顺序绘制：
 
----
+```text
+background glow
+background core
+foreground glow
+foreground core
+```
 
-## 9. 有界性
+Glow 使用轻度 additive blend，core 使用标准 alpha blend。
 
-有限和满足：
+## 11. DOM obstacle
+
+DOM 几何只进入 fragment shader：
+
+```text
+math position
+    ↓
+color / alpha mask
+```
+
+组件内部轨迹使用灰色，空白背景使用蓝 / 青蓝 / 蓝紫：
+
+```text
+background inside alpha = 0.15
+background edge halo = 18 px smoothstep
+foreground inside alpha = 0.62
+```
+
+不允许 obstacle 修改：
 
 ```math
-|z(t)|
-\le
-\sum_{j=1}^{N}|c_j|.
+\lambda_j,quad
+c_j(a),quad
+t,quad
+X(a,t).
 ```
 
-因此只要系数固定，轨迹天然被限制在一个有界区域。
+因此没有 collision、reflection、velocity deflection、signed-distance force 或 potential-field avoidance。
 
-不需要额外 clamp。
+## 12. Sakura
 
-长期覆盖区域也可直接由系数解释。写成：
-
-```math
-c_j=r_je^{i\phi_j}.
-```
-
-当 `m_j = 2, 3, 5, 7, 11, 13` 具有不同的 square-free part 时，频率之间不存在非平凡整数线性关系。Kronecker 型稠密性说明相位向量在 `N` 维 torus 上稠密，因此轨道闭包是可旋转向量和形成的 annulus：
-
-```math
-r_-\le |z|\le r_+,
-\qquad
-r_+=\sum_jr_j,
-\qquad
-r_-=\max\left(2\max_jr_j-\sum_jr_j,0\right).
-```
-
-当前平缓 amplitude envelope 满足 `r_-=0`，所以长期轨道闭包覆盖整个圆盘，而不是收敛到大圆或 attractor。
-
-网站不把整个长期闭包直接映射到 viewport，而是先固定一个二维空间窗口：
-
-```math
-Q=[x_0,x_1]\times[y_0,y_1]\subset\mathbb C.
-```
-
-窗口宽高比固定为 16:9。屏幕映射只使用一个统一尺度：
-
-```math
-S=1.04\min\left(\frac{W}{x_1-x_0},\frac{H}{y_1-y_0}\right),
-```
-
-```math
-X=\frac W2+S(x-x_c),
-\qquad
-Y=\frac H2-S(y-y_c).
-```
-
-因此圆弧不会被横向或纵向拉扁；`1.04` 只提供 4% overscan。
-
----
-
-## 10. Tracer：同一条 fractional spectral orbit 的时间截面
-
-整个 tracer 系统只使用一条轨道：
-
-```math
-\gamma(t)
-=
-\sum_{j=1}^{N}c_je^{i\beta m_j^{3/2}t}.
-```
-
-离线在 `t∈[0,600]` 上采样 100,000 个点，并按网格覆盖率、独立弧段数、窗口内弧长和集中度搜索 crop。固定结果为：
-
-```math
-Q=[-0.595426,0.134689]\times[-1.229504,-0.818815].
-```
-
-该窗口覆盖全部 `12×7` 网格，并把可见时间集合分解成 73 个区间：
-
-```math
-\mathcal I
-=
-\{t:z(t)\in Q\}
-=
-I_1\cup\cdots\cup I_{73}.
-```
-
-这些区间总长约为 `14.1243`。每一个 `I_r=[a_r,b_r]` 都对应画面中的一条连续弧。
-
-初始化先为每个区间保留一个 tracer；其余 tracer 从这些区间按长度加权采样初始时间：
-
-```math
-\Pr(I_r)=\frac{b_r-a_r}{\sum_q(b_q-a_q)},
-\qquad
-\tau_k\sim\operatorname{Uniform}(a_r,b_r).
-```
-
-真实时间记为 `s`，播放速度固定为：
-
-```math
-\boxed{t_k(s)=\tau_k+0.025s.}
-```
-
-等价地，每个 mode 的相位只能写成 `φ_j+λ_jt_k(s)`。不允许为粒子生成独立的 `φ_{j,k}`、amplitude、中心或速度尺度，否则会产生另一条轨道。
-
-当前全质量目标为 600 个可见 tracer，调度容量为 1200；后景使用 510 个，前景使用 90 个。所有 tracer 在第一帧已经分布于 `\mathcal I`，无需等待轨迹生成。
-
-当 `t_k` 超出当前 `I_r` 时，不 clamp 或反弹。该 tracer 用 `0.2–0.4 s` 淡出，随后从另一个按长度加权的可见区间重新采样 `τ_k`，并用 `0.4–0.8 s` 淡入。
-
-每根尾迹也必须从同一条 `γ` 解析采样：
-
-```math
-\boxed{
-P_{k,\ell}
-=
-z(t_k-\ell\delta t)
-}
-```
-
-实现使用 12 个历史采样点，理论时间跨度为 `0.10–0.18`。尾迹是真实 fractional spectral curve，不是根据瞬时速度绘制的直线。网站只绘制这些短 trail，不额外绘制完整长期轨道。
-
----
-
-## 11. Sakura 的轨迹
-
-花瓣不能完全做纯闭合谱 orbit，因为它必须持续下落。
-
-因此使用：
+花瓣保留原有下落、横向摆动、spin、twist 与 squash。对固定参数 `a_k`：
 
 ```math
 X_{\mathrm{sakura}}(t)
 =
-X_0
-+
-V_{\mathrm{fall}}t
-+
-\varepsilon
-\begin{pmatrix}
-\Re z(t)\\
-\eta\,\Im z(t)
-\end{pmatrix}.
+X_{\mathrm{normal}}(t)
++\kappa_kD(a_k,t),
 ```
-
-其中：
 
 ```math
-z(t)
-=
-\sum_{j=1}^{N_s}
-c_je^{i\lambda_jt}.
+\kappa_k\in[0.30,0.50].
 ```
 
-推荐：
+Field blend 只控制谱位移的插值强度，不重置原有物种状态。
 
-```text
-Ns = 3–5
-η = 0.2–0.5
-```
+## 13. Fireflies
 
-解释：
-
-- `V_fall t` 决定长期下降；
-- `Re z(t)` 决定主要横向摆动；
-- `Im z(t)` 只提供较小竖直 flutter；
-- spin / twist / squash 继续作为姿态变量单独处理。
-
-如果使用 wrap：
-
-```math
-y(t)
-\mapsto
-y(t)\bmod H,
-```
-
-则花瓣可长期存在。
-
----
-
-## 12. Fireflies 的轨迹
-
-萤火虫不需要线性 drift。
-
-建议：
+萤火虫保留 local orbit、breathe 与 slow drift：
 
 ```math
 X_{\mathrm{firefly}}(t)
 =
-X_c
-+
-s
+X_{\mathrm{normal}}(t)
++\kappa_kD(a_k,t),
+```
+
+```math
+\kappa_k\in[0.25,0.40].
+```
+
+它们与 tracer 共用 `\Gamma`，但耦合较弱，因此不会完全同步。
+
+## 14. Grass
+
+第 `k` 根草固定使用：
+
+```math
+a_k=(u_k,1).
+```
+
+摆角读取解析速度的横向分量：
+
+```math
+\theta_k(t)
+=
+\theta_{0,k}
++\kappa_kV_x(a_k,t).
+```
+
+根部位置不移动，草叶只作为场方向的稳定指示器。
+
+## 15. 禁止项
+
+Tracer 主逻辑不得引入：
+
+- 每粒子独立随机 phase 或 amplitude；
+- Perlin / Simplex / curl noise；
+- 随机向量场；
+- 粒子 advection；
+- 母螺旋、backbone 或 attractor；
+- RK2 位置积分；
+- DOM 驱动的动力学偏折。
+
+## 16. 最终公式
+
+Field Mode 的数学链压缩为：
+
+```math
+\lambda_j=\beta m_j^{3/2},
+```
+
+```math
+\Gamma(a,t)
+=
+\sum_jA_j(a)e^{i(\lambda_jt+\phi_j(a))},
+```
+
+```math
+X_k(t)
+=
 \begin{pmatrix}
-\Re z(t)\\
-\Im z(t)
+Wu_k\\
+Hv_k
+\end{pmatrix}
++s
+\begin{pmatrix}
+\Re\Gamma(a_k,t)\\
+\Im\Gamma(a_k,t)
 \end{pmatrix},
 ```
 
-其中：
-
 ```math
-z(t)
+\operatorname{Trail}_k(t)
 =
-\sum_{j=1}^{N_f}
-c_je^{i\lambda_jt}.
+\left\{
+X_k(t-s):0\le s\le\Delta_k
+\right\}.
 ```
 
-推荐：
+最终层级是：
 
 ```text
-Nf = 3–5
-```
-
-比 tracer 少。
-
-原因：
-
-- 萤火虫应该有清晰的大尺度游走；
-- 太多 mode 会显得像高频抖动；
-- glow 已经提供额外动态层次。
-
-亮度：
-
-```math
-I(t)
-=
-I_0
-+
-I_1
-\sin(\omega_gt+\rho).
-```
-
-`ω_g` 不要取任意 `λ_j`，避免亮度和空间运动锁相。
-
----
-
-## 13. Grass 的轨迹
-
-Grass 不是平面位置轨迹，而是角度轨迹。
-
-第 q 根草：
-
-```math
-\theta_q(t)
-=
-\theta_{0,q}
-+
-\Re
-\sum_{j=1}^{N_g}
-d_{q,j}
-e^{i(k_jx_q-\lambda_jt+\phi_{q,j})}.
-```
-
-推荐：
-
-```text
-Ng = 3–4
-```
-
-相邻草的参数不能完全独立随机。
-
-应让：
-
-```math
-\phi_{q+1,j}-\phi_{q,j}
-```
-
-随 `q` 平滑变化。
-
-这样产生 travelling spectral wave，而不是 150 根独立摆动。
-
----
-
-## 14. 同一谱场，不同物种耦合
-
-Tracer 严格使用同一条 `γ`，差异只有可见区间内的时间位置 `t_k`：
-
-```math
-X_{\mathrm{tracer},j}
-=
-\operatorname{ViewportMap}_Q\!\left(\gamma(t_j)\right),
-\qquad
-\gamma(t_j)\in Q.
-```
-
-花瓣、萤火虫与草保留第 11–13 节定义的物种动力，只共享 `λ_j = βm_j^{3/2}` 这组 fractional clock。它们不参与 tracer 的位置计算，也不能引入粒子私有谱相位。
-
----
-
-## 15. 点击交互
-
-Field Mode 下点击不添加独立粒子系统，也不修改 `γ`、`Q`、`t_k` 或任何 mode phase。Normal Mode 原有 ripple 保留，二者互不影响。
-
----
-
-## 16. Pointer move
-
-Pointer move 不参与 tracer 数学链，避免把同一条时间平移轨道改成依赖屏幕位置的另一套动力系统。
-
----
-
-## 17. DOM obstacle：只改变颜色和 alpha
-
-网页卡片不改变 `γ`、`Q`、可见区间或 `t_k`。根据 DOM 矩形对实际尾迹覆盖区域应用颜色和 alpha 遮罩：背景空白处保留蓝色，组件内 core 与 glow 使用中性灰（日间 `#808080`、夜间 `#B0B0B0`）；FieldBack 乘 `0.20`，FieldFront 乘 `0.72`。重叠矩形只应用一次遮罩，轨迹位置和尾迹采样始终连续。
-
-因此：
-
-```text
-one fractional spectral orbit
-    ↓
-fixed spatial crop Q
-    ↓
-visible interval scheduling
-    ↓
-uniform viewport scale
-    ↓
-obstacle alpha mask
-    ↓
-render
-```
-
-动力学和 UI 几何保持解耦。
-
----
-
-## 18. 低性能档的数学降级
-
-Normal Mode 不需要抛弃这套模型。
-
-只减少 mode 数：
-
-```text
-Tracer: disabled
-Sakura: 2–3 modes
-Fireflies: 2–3 modes
-Grass: 2 modes
-```
-
-并保持：
-
-```text
-30 FPS
-Canvas2D
-```
-
-如果继续沿用当前实现，也可以暂时保持旧 quasi-periodic 公式。
-
-但未来最好仍然共享同一 spectral clock。
-
----
-
-## 19. 高性能档参数
-
-推荐第一版：
-
-```text
-alpha = 1.5
-
-mode indices:
-[2, 3, 5, 7, 11, 13]
-
-beta:
-0.18
-
-tracer modes:
-6
-
-firefly modes:
-3–5
-
-sakura modes:
-3–5
-
-grass modes:
-3–4
-```
-
-不同对象只使用公共列表的不同子集。
-
----
-
-## 20. 防止高频过强
-
-因为：
-
-```math
-\lambda_m=m^{3/2},
-```
-
-高 mode 的速度会快速增加。
-
-因此系数不能平坦。
-
-推荐：
-
-```math
-r_j
-\propto
-\lambda_j^{-\gamma},
-```
-
-其中：
-
-```text
-γ = 0.7–1.1
-```
-
-或者直接：
-
-```math
-r_j
-\propto
-(j+j_0)^{-p}.
-```
-
-这样高 mode 负责细节，而不是支配速度。
-
----
-
-## 21. WebGL2 解析式 instancing
-
-当前后景 tracer 只保存调度状态 `(t_k, alpha)`，不保存二维位置。CPU 每帧以 `0.025Δs` 推进 `t_k` 并处理可见区间的淡入淡出；顶点着色器直接计算 `γ(t_k-ℓδt)` 和固定 crop 映射。
-
-全质量后景为 `510 × 11 × 6` 个三角形顶点，glow 与 core 各绘制一次。进入 Field Mode 时 600 个 `t_k` 已按可见区间长度分布，不需要 warm-up 或二维位置积分。
-
----
-
-## 22. Variable dt
-
-帧间 `Δs` 只用于推进 `t_k←t_k+0.025Δs` 和淡化计时，不参与轨道形状或尾迹长度。对异常大的帧间隔设上界，避免标签页恢复时跨过多个短可见区间。
-
----
-
-## 23. 长期连续性与数值稳定
-
-`γ`、`Q` 和 73 个可见区间始终固定。Tracer 离开 crop 后只重采样轨道时间，不生成新轨道参数；调度 seed 确定性推进，保证同一次运行中没有随机跳模。轨道是有限复指数和，本身始终有界。
-
----
-
-## 24. 全局时间连续性
-
-切换性能档时必须保持：
-
-```math
-t_{\mathrm{field}}
-=
-t_{\mathrm{normal}}.
-```
-
-不能重新设 `t = 0`。
-
-因此所有模式：
-
-```text
-Normal
-Field
-Light
-Dark
-```
-
-共享同一个：
-
-```text
-global spectral time
-```
-
-只有系数、可见对象和 render path 变化。
-
----
-
-## 25. 轨迹的几何解释
-
-有限 mode 情况下，定义：
-
-```math
-\Theta(t)
-=
-(
-e^{i\lambda_1t},
-\dots,
-e^{i\lambda_Nt}
-).
-```
-
-它运行在 N 维 torus：
-
-```math
-\mathbb T^N.
-```
-
-二维轨迹：
-
-```math
-z(t)
-=
-\sum_j c_j\Theta_j(t)
-```
-
-是这个 torus 轨道经过一个线性观测后的投影。
-
-因此视觉上的“复杂曲线”不是混沌。
-
-它是：
-
-```text
-quasi-periodic torus motion
-    ↓
-linear observation
-    ↓
-2D spectral orbit
-```
-
----
-
-## 26. 为什么长期不会死
-
-有三个原因。
-
-第一：
-
-```math
-|e^{i\lambda_jt}|=1.
-```
-
-每个 mode 振幅恒定。
-
-第二：
-
-```math
-\lVert U(t)f\rVert
-=
-\lVert f\rVert.
-```
-
-整体 Hilbert norm 守恒。
-
-第三：
-
-没有：
-
-```text
-negative real eigenvalue
-damping
-gradient descent
-attractor
-```
-
-因此它可以无限运行而不趋于一点。
-
----
-
-## 27. 为什么不会太规则
-
-若所有频率都有共同基本频率：
-
-```math
-\lambda_j=n_j\omega_0,
-```
-
-轨迹会周期闭合。
-
-本项目通过：
-
-```math
-\lambda_j=\beta m_j^{3/2}
-```
-
-并选择不同 square-free part 的 `m_j`，尽量避免简单整数关系。
-
-因此得到长期 quasi-periodicity。
-
----
-
-## 28. 推荐默认 tracer preset
-
-当前版本使用：
-
-```text
-mode indices:
-[2, 3, 5, 7, 11, 13]
-
-amplitudes:
-[0.42, 0.36, 0.30, 0.25, 0.20, 0.16]
-
-beta:
-0.18
-
-active tracers:
-600 at full quality
-
-capacity:
-1200
-
-crop search:
-100,000 samples over t = 0–600
-
-crop Q:
-x = [-0.595426, 0.134689]
-y = [-1.229504, -0.818815]
-
-visible intervals:
-73, total theoretical duration 14.1243
-
-playback speed:
-0.025
-
-background / foreground:
-510 / 90
-
-trail:
-12 samples, theoretical time 0.10–0.18
-
-day core / glow:
-1.5–2.2 px / 3.5–5.5 px
-
-night core / glow:
-1.4–2.0 px / 4–6 px
-
-bright tracer:
-2.4–3.0 px day / 2.2–2.8 px night
-```
-
----
-
-## 29. 推荐默认 species preset
-
-### Sakura
-
-```text
-modes: 2, 3, 5, 7
-spectral scale: medium
-vertical drift: strong
-vertical spectral contribution: weak
-```
-
-### Fireflies
-
-```text
-modes: 2, 3, 5, 11
-spectral scale: small
-centered orbit
-breathe: independent
-```
-
-### Grass
-
-```text
-modes: 2, 3, 5
-spatial phase shift: smooth
-high-frequency amplitude: low
-```
-
-### Tracer
-
-```text
-modes: 2, 3, 5, 7, 11, 13
-one shared orbit
-600 scheduled time positions across 73 visible intervals
-playback speed: 0.025
-foreground subset: 90
-```
-
----
-
-## 30. 最终核心公式
-
-Tracer 数学与观察链压缩为：
-
-```math
-\boxed{
-z(t)
-=
-\sum_j c_je^{i\beta m_j^{3/2}t}
-}
-```
-
-```math
-\boxed{
-Q
-\subset
-\mathbb C
-}
-```
-
-```math
-\boxed{
-z(t_k)
-\in
-Q
-}
-```
-
-```math
-\boxed{
-t_k(s)
-=
-\tau_k+0.025s
-}
-```
-
-600 个粒子不是 600 条曲线，而是同一条 fractional spectral orbit 在固定空间窗口中的 600 个时间截面。数学层级必须保持：
-
-```text
-one fractional spectral orbit z(t)
-    ↓
-fixed spatial crop Q
-    ↓
-73 visible time intervals
-    ↓
-600 slow time translations t_k(s)
-    ↓
-uniform viewport scale
-    ↓
-true historical trail samples only
+one fractional spectrum
++ one global clock
++ one smooth two-parameter observation family
++ deterministic viewport coverage
++ analytic historical trails
 ```
