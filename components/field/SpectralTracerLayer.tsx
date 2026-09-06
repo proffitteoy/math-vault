@@ -3,11 +3,13 @@
 import type { RefObject } from "react"
 import { SPECTRAL_LAMBDAS } from "./spectralField"
 
-export const SPECTRAL_TRACER_BACKGROUND = 560
-export const SPECTRAL_TRACER_FOREGROUND = 36
-export const SPECTRAL_TRACER_CAPACITY = 640
+export const SPECTRAL_TRACER_BACKGROUND = 3200
+export const SPECTRAL_TRACER_FOREGROUND = 120
+export const SPECTRAL_TRACER_CAPACITY = 4096
 export const SPECTRAL_TRACER_MAX_OBSTACLES = 8
 
+const BACKGROUND_RENDER_CAPACITY = 560
+const FOREGROUND_RENDER_CAPACITY = 36
 const FIELD_KX = [1.0, 2.0, 3.0, 1.0, 4.0, 2.0] as const
 const FIELD_KY = [2.0, -1.0, 1.0, -3.0, 2.0, 5.0] as const
 const FIELD_AMPLITUDES = [1.0, 0.72, 0.5, 0.38, 0.26, 0.18] as const
@@ -94,7 +96,7 @@ function velocityAt(
     const cosine = Math.cos(phase)
     const amplitude = FIELD_AMPLITUDES[mode]
 
-    // V = J grad(psi): an analytic divergence-free spectral vector field.
+    // V = J grad(psi): analytic, smooth and divergence free.
     vx += amplitude * FIELD_KY[mode] * cosine
     vy -= amplitude * FIELD_KX[mode] * cosine
   }
@@ -172,12 +174,19 @@ function createLayerRenderer(
     if (alpha <= 0.001) return
 
     const requested = layer === 0 ? backgroundCount : foregroundCount
-    const count = Math.max(0, Math.min(requested, capacity))
+    const scale = layer === 0 ? BACKGROUND_RENDER_CAPACITY / SPECTRAL_TRACER_BACKGROUND : FOREGROUND_RENDER_CAPACITY / SPECTRAL_TRACER_FOREGROUND
+    const count = Math.max(0, Math.min(Math.round(requested * scale), capacity))
     if (count <= 0) return
 
-    const steps = layer === 0 ? Math.max(12, Math.min(22, trailSamples + 4)) : Math.max(8, Math.min(15, trailSamples))
+    const steps =
+      layer === 0
+        ? Math.max(12, Math.min(22, trailSamples + 4))
+        : Math.max(8, Math.min(15, trailSamples))
     const baseStep = Math.min(width, height) / (layer === 0 ? 112 : 128)
-    const stepLength = Math.max(layer === 0 ? 6.2 : 5.2, Math.min(layer === 0 ? 9.5 : 7.5, baseStep))
+    const stepLength = Math.max(
+      layer === 0 ? 6.2 : 5.2,
+      Math.min(layer === 0 ? 9.5 : 7.5, baseStep),
+    )
     const palette =
       theme < 0.5
         ? ["rgba(64,145,220,1)", "rgba(68,170,228,1)", "rgba(105,112,210,1)"]
@@ -220,12 +229,13 @@ function createLayerRenderer(
 
       context.globalCompositeOperation = "lighter"
       context.strokeStyle = palette[bucket]
-      context.globalAlpha = alpha * (layer === 0 ? (0.075 + theme * 0.025) : (0.07 + theme * 0.035))
+      context.globalAlpha =
+        alpha * (layer === 0 ? 0.075 + theme * 0.025 : 0.07 + theme * 0.035)
       context.lineWidth = layer === 0 ? 3.2 : 2.8
       context.stroke(path)
 
       context.globalCompositeOperation = "source-over"
-      context.globalAlpha = alpha * (layer === 0 ? (0.22 + theme * 0.08) : (0.22 + theme * 0.1))
+      context.globalAlpha = alpha * (layer === 0 ? 0.22 + theme * 0.08 : 0.22 + theme * 0.1)
       context.lineWidth = layer === 0 ? 0.92 : 1.08
       context.stroke(path)
     }
@@ -257,12 +267,11 @@ export function createSpectralTracerController(
   backCanvas: HTMLCanvasElement,
   frontCanvas: HTMLCanvasElement,
 ): SpectralTracerController | null {
-  const backRenderer = createLayerRenderer(backCanvas, 0, SPECTRAL_TRACER_BACKGROUND, 0)
-  const frontCapacity = SPECTRAL_TRACER_CAPACITY - SPECTRAL_TRACER_BACKGROUND
+  const backRenderer = createLayerRenderer(backCanvas, 0, BACKGROUND_RENDER_CAPACITY, 0)
   const frontRenderer = createLayerRenderer(
     frontCanvas,
     SPECTRAL_TRACER_BACKGROUND,
-    frontCapacity,
+    FOREGROUND_RENDER_CAPACITY,
     1,
   )
 
