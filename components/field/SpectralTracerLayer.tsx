@@ -4,7 +4,6 @@ import type { RefObject } from "react"
 import {
   SPECTRAL_FIELD_GLSL,
   SPECTRAL_LAMBDAS,
-  SPECTRAL_PLAYBACK_RATE,
   spectralParameterAt,
 } from "./spectralField"
 
@@ -13,7 +12,7 @@ export const SPECTRAL_TRACER_FOREGROUND = 120
 export const SPECTRAL_TRACER_CAPACITY = 4096
 export const SPECTRAL_TRACER_MAX_OBSTACLES = 8
 
-const MAX_TRAIL_SAMPLES = 8
+const MAX_TRAIL_SAMPLES = 14
 const MAX_TRAIL_SEGMENTS = MAX_TRAIL_SAMPLES - 1
 const STATE_COMPONENTS = 4
 
@@ -81,19 +80,18 @@ void main() {
   vec2 parameter = aState.xy;
   float opacity = aState.z;
   float styleSeed = aState.w;
-  float trailDuration = mix(0.08, 0.22, hash11(styleSeed * 7.13 + 1.9));
+  float trailSpan = mix(0.25, 0.60, hash11(styleSeed * 7.13 + 1.9));
   int segment = gl_VertexID / 6;
   int corner = gl_VertexID - segment * 6;
   float segmentStart = float(segment) / uTrailSegments;
   float segmentEnd = float(segment + 1) / uTrailSegments;
-  float historyScale = ${SPECTRAL_PLAYBACK_RATE.toFixed(2)};
   vec2 start = viewportFieldPoint(
     parameter,
-    uTime - segmentStart * trailDuration * historyScale
+    uTime - segmentStart * trailSpan
   );
   vec2 end = viewportFieldPoint(
     parameter,
-    uTime - segmentEnd * trailDuration * historyScale
+    uTime - segmentEnd * trailSpan
   );
   bool useStart = corner == 0 || corner == 3 || corner == 5;
   float side = corner == 0 || corner == 1 || corner == 3 ? -1.0 : 1.0;
@@ -107,10 +105,10 @@ void main() {
   float glowWidth = mix(2.8, 4.8, widthRoll) + uTheme * 0.3;
   position += normal * side * mix(coreWidth, glowWidth, uGlow) * 0.5;
 
-  float dayCoreAlpha = mix(0.10, 0.22, alphaRoll);
-  float nightCoreAlpha = mix(0.16, 0.30, alphaRoll);
-  float dayGlowAlpha = mix(0.015, 0.045, alphaRoll);
-  float nightGlowAlpha = mix(0.03, 0.07, alphaRoll);
+  float dayCoreAlpha = mix(0.08, 0.16, alphaRoll);
+  float nightCoreAlpha = mix(0.12, 0.23, alphaRoll);
+  float dayGlowAlpha = mix(0.012, 0.034, alphaRoll);
+  float nightGlowAlpha = mix(0.023, 0.053, alphaRoll);
   float coreAlpha = mix(dayCoreAlpha, nightCoreAlpha, uTheme);
   float glowAlpha = mix(dayGlowAlpha, nightGlowAlpha, uTheme);
   float flowAlpha = pow(1.0 - segmentStart, 1.15);

@@ -106,13 +106,19 @@ opacity
 styleSeed
 ```
 
+谱参数仍为 $a=(u,v)\in[0,1]^2$，但 anchor 使用约 10% overscan：
+
+$$
+q(a)=1.2a-0.1\in[-0.1,1.1]^2.
+$$
+
 基础位置与谱位移分别为：
 
 ```math
 X_0(u,v)=
 \begin{pmatrix}
-Wu\\
-Hv
+W(1.2u-0.1)\\
+H(1.2v-0.1)
 \end{pmatrix},
 qquad
 D(u,v,t)=s
@@ -146,8 +152,8 @@ X\!\left(a_k,t-\frac{\ell}{L-1}\Delta\right).
 background tracers: 3200
 foreground tracers: 120
 capacity: 4096
-trail samples: 8
-trail duration: 0.08–0.22 s
+trail samples: 14
+spectral span: 0.25–0.60
 modes: 6
 DPR: 1.5
 FPS target: 60
@@ -159,8 +165,8 @@ FPS target: 60
 
 | 参数       | Light                          | Dark                            |
 | ---------- | ------------------------------ | ------------------------------- |
-| core alpha | 0.10–0.22                      | 0.16–0.30                       |
-| glow alpha | 0.015–0.045                    | 0.03–0.07                       |
+| core alpha | 0.08–0.16                      | 0.12–0.23                       |
+| glow alpha | 0.012–0.034                    | 0.023–0.053                     |
 | core width | 0.82–1.48 px                   | 0.74–1.40 px                    |
 | palette    | blue / cyan-blue / blue-violet | cyan / cold blue / faint violet |
 
@@ -224,11 +230,11 @@ Field → Normal：
 
 | 等级 | Background | Foreground | Modes | Trail samples |  DPR | FPS |
 | ---- | ---------: | ---------: | ----: | ------------: | ---: | --: |
-| Q0   |       3200 |        120 |     6 |             8 |  1.5 |  60 |
-| Q1   |       2800 |        100 |     6 |             8 |  1.5 |  60 |
-| Q2   |       2200 |         80 |     6 |             8 | 1.25 |  60 |
-| Q3   |       1800 |         64 |     6 |             7 |  1.0 |  60 |
-| Q4   |       1400 |         48 |     5 |             6 |  1.0 |  45 |
+| Q0   |       3200 |        120 |     6 |            14 |  1.5 |  60 |
+| Q1   |       2800 |        100 |     6 |            12 |  1.5 |  60 |
+| Q2   |       2200 |         80 |     6 |            12 | 1.25 |  60 |
+| Q3   |       1800 |         64 |     6 |            10 |  1.0 |  60 |
+| Q4   |       1400 |         48 |     5 |             8 |  1.0 |  45 |
 | Q5   |        900 |         32 |     4 |             6 |  1.0 |  30 |
 
 连续三个 2 秒窗口低于 42 FPS 后只降一级。降级顺序优先减少 tracer 数量与 DPR，最后才减少 mode 数。

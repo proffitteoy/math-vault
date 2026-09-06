@@ -121,7 +121,7 @@ A_j(u,v)
 [0.31, 2.17, 4.02, 5.41, 1.24, 3.52]
 ```
 
-幅度调制随 mode 从 `0.08` 增到 `0.27`，相位调制从 `0.16` 墐到 `0.78`。低 mode 控制大尺度相干，高 mode 提供细丝、折返与局部干涉。
+幅度调制随 mode 从 `0.08` 增到 `0.27`，相位调制从 `0.16` 增到 `0.78`。低 mode 控制大尺度相干，高 mode 提供细丝、折返与局部干涉。
 
 ## 4. 参数连续性
 
@@ -175,14 +175,20 @@ v_k=\operatorname{frac}\left(\frac12+\frac{k+1}{g^2}\right).
 
 ## 7. Viewport 映射
 
-基础位置直接覆盖屏幕：
+谱系数参数仍取 $a=(u,v)\in[0,1]^2$。为补偿谱位移把边缘轨迹推出 viewport，anchor 使用：
+
+$$
+q(a)=1.2a-0.1\in[-0.1,1.1]^2.
+$$
+
+基础位置覆盖带 overscan 的屏幕区域：
 
 ```math
 X_0(a)
 =
 \begin{pmatrix}
-Wu\\
-Hv
+W(1.2u-0.1)\\
+H(1.2v-0.1)
 \end{pmatrix}.
 ```
 
@@ -238,7 +244,7 @@ P_{k,\ell}(t)
 =
 X\!\left(
 a_k,
-t-\frac{\ell}{L-1}\rho\Delta_k
+t-\frac{\ell}{L-1}\Delta_k
 \right),
 qquad
 0\le\ell<L.
@@ -247,11 +253,13 @@ qquad
 其中：
 
 ```text
-L = 8 at full quality
-Δ_k = 0.08–0.22 wall seconds
+L = 14 at full quality
+Δ_k = 0.25–0.60 spectral-time span
 ```
 
-tail 是同一个参数化轨道的真实历史短弧，不是依据瞬时 velocity 绘制的直线，也没有粒子 head。
+$\rho=0.30$ 只控制当前数学时刻随墙钟推进的速度，不再第二次缩短 $\Delta_k$。一帧展示的是同一个参数化轨道上足够长的局部谱弧段，不是最近 0.08–0.22 秒形成的几像素残影。
+
+谱弧段不是依据瞬时 velocity 绘制的直线，也没有粒子 head。
 
 全质量状态：
 

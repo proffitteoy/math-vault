@@ -52,7 +52,7 @@ const FIELD_QUALITY: FieldQuality[] = [
     foregroundCount: SPECTRAL_TRACER_FOREGROUND,
     pixelRatio: 1.5,
     modeCount: 6,
-    trailSamples: 8,
+    trailSamples: 14,
     frameMs: 1000 / 60,
   },
   {
@@ -60,7 +60,7 @@ const FIELD_QUALITY: FieldQuality[] = [
     foregroundCount: 100,
     pixelRatio: 1.5,
     modeCount: 6,
-    trailSamples: 8,
+    trailSamples: 12,
     frameMs: 1000 / 60,
   },
   {
@@ -68,7 +68,7 @@ const FIELD_QUALITY: FieldQuality[] = [
     foregroundCount: 80,
     pixelRatio: 1.25,
     modeCount: 6,
-    trailSamples: 8,
+    trailSamples: 12,
     frameMs: 1000 / 60,
   },
   {
@@ -76,7 +76,7 @@ const FIELD_QUALITY: FieldQuality[] = [
     foregroundCount: 64,
     pixelRatio: 1,
     modeCount: 6,
-    trailSamples: 7,
+    trailSamples: 10,
     frameMs: 1000 / 60,
   },
   {
@@ -84,7 +84,7 @@ const FIELD_QUALITY: FieldQuality[] = [
     foregroundCount: 48,
     pixelRatio: 1,
     modeCount: 5,
-    trailSamples: 6,
+    trailSamples: 8,
     frameMs: 1000 / 45,
   },
   {

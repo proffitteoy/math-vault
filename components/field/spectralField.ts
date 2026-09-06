@@ -112,6 +112,7 @@ vec2 sampleSpectralFamily(vec2 parameter, float time) {
 }
 
 vec2 viewportFieldPoint(vec2 parameter, float time) {
-  return parameter * uResolution + sampleSpectralFamily(parameter, time) * uFieldScale;
+  vec2 anchor = mix(vec2(-0.1), vec2(1.1), parameter);
+  return anchor * uResolution + sampleSpectralFamily(parameter, time) * uFieldScale;
 }
 `
