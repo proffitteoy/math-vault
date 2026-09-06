@@ -280,16 +280,21 @@ X\!\left(a_k,t-\ell\delta t_k\right).
 
 CPU 不逐帧推进粒子位置，也不维护独立 velocity、center、phase array 或 amplitude array。4096 个参数状态只在 renderer 创建时上传一次。
 
-单一 WebGL2 context 按以下顺序绘制：
+为了让 DOM UI 真正位于前后景之间，渲染使用两个 WebGL2 context：
 
 ```text
-background glow
-background core
-foreground glow
-foreground core
+z-3 FieldBack canvas
+    background glow
+    background core
+
+Application UI
+
+z-20 FieldFront canvas
+    foreground glow
+    foreground core
 ```
 
-Glow 使用轻度 additive blend，core 使用标准 alpha blend。
+每个 canvas 内 glow 使用轻度 additive blend，core 使用标准 alpha blend。两层共享同一组 `a_k` 生成规则、`\lambda_j`、谱族公式、数学时间与 obstacle 几何；context 只负责不同的 DOM 深度，不能产生独立动力。
 
 ## 11. DOM obstacle
 

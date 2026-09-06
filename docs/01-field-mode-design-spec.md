@@ -33,14 +33,14 @@ FieldFront: sparse foreground tracers
 Navbar / modal / critical UI
 ```
 
-`FieldBack` 与 `FieldFront` 是同一 WebGL2 context 内的逻辑 pass，不再由 WebGL 与 Canvas2D 两套 tracer renderer 分别承担。
+`FieldBack` 与 `FieldFront` 必须是两个真实的 DOM canvas，分别拥有 WebGL2 context。GPU draw pass 不能跨越 DOM stacking context，因此不能把两层合并到同一个 canvas。
 
-实际绘制顺序固定为：
+浏览器层级与各 canvas 内的绘制顺序固定为：
 
-1. background glow；
-2. background core；
-3. foreground glow；
-4. foreground core。
+1. `z-3` FieldBack canvas：background glow → background core；
+2. Application UI；
+3. `z-20` FieldFront canvas：foreground glow → foreground core；
+4. `z-[21]` interaction canvas。
 
 独立的 Canvas2D 画布只保留 Normal Mode 点击涟漪，不计算或绘制 tracer。
 
@@ -55,7 +55,7 @@ Navbar / modal / critical UI
 
 ### Field Mode
 
-- 创建一个全屏 WebGL2 context；
+- 创建后景与前景两个全屏 WebGL2 context；
 - 使用 instancing 绘制二维参数化谱轨道族；
 - 保留花瓣、萤火虫与草的物种运动，再插值接入同一谱族；
 - DOM obstacle 定时采样，不能逐帧读取布局；
@@ -76,9 +76,11 @@ qquad
 视觉墙钟与数学时间分离：
 
 ```math
-t_{\mathrm{math}}=ho t_{\mathrm{wall}},
+t_{\mathrm{math}}=
+ho t_{\mathrm{wall}},
 qquad
-ho=0.30.
+
+ho=0.30.
 ```
 
 轨道族为：
@@ -155,12 +157,12 @@ FPS target: 60
 
 视觉范围：
 
-| 参数 | Light | Dark |
-| --- | --- | --- |
-| core alpha | 0.10–0.22 | 0.16–0.30 |
-| glow alpha | 0.015–0.045 | 0.03–0.07 |
-| core width | 0.82–1.48 px | 0.74–1.40 px |
-| palette | blue / cyan-blue / blue-violet | cyan / cold blue / faint violet |
+| 参数       | Light                          | Dark                            |
+| ---------- | ------------------------------ | ------------------------------- |
+| core alpha | 0.10–0.22                      | 0.16–0.30                       |
+| glow alpha | 0.015–0.045                    | 0.03–0.07                       |
+| core width | 0.82–1.48 px                   | 0.74–1.40 px                    |
+| palette    | blue / cyan-blue / blue-violet | cyan / cold blue / faint violet |
 
 不绘制粒子 head，不使用长 comet tail，不根据瞬时速度伪造直线。
 
@@ -220,14 +222,14 @@ Field → Normal：
 
 ## 10. 性能等级
 
-| 等级 | Background | Foreground | Modes | Trail samples | DPR | FPS |
-| --- | ---: | ---: | ---: | ---: | ---: | ---: |
-| Q0 | 3200 | 120 | 6 | 8 | 1.5 | 60 |
-| Q1 | 2800 | 100 | 6 | 8 | 1.5 | 60 |
-| Q2 | 2200 | 80 | 6 | 8 | 1.25 | 60 |
-| Q3 | 1800 | 64 | 6 | 7 | 1.0 | 60 |
-| Q4 | 1400 | 48 | 5 | 6 | 1.0 | 45 |
-| Q5 | 900 | 32 | 4 | 6 | 1.0 | 30 |
+| 等级 | Background | Foreground | Modes | Trail samples |  DPR | FPS |
+| ---- | ---------: | ---------: | ----: | ------------: | ---: | --: |
+| Q0   |       3200 |        120 |     6 |             8 |  1.5 |  60 |
+| Q1   |       2800 |        100 |     6 |             8 |  1.5 |  60 |
+| Q2   |       2200 |         80 |     6 |             8 | 1.25 |  60 |
+| Q3   |       1800 |         64 |     6 |             7 |  1.0 |  60 |
+| Q4   |       1400 |         48 |     5 |             6 |  1.0 |  45 |
+| Q5   |        900 |         32 |     4 |             6 |  1.0 |  30 |
 
 连续三个 2 秒窗口低于 42 FPS 后只降一级。降级顺序优先减少 tracer 数量与 DPR，最后才减少 mode 数。
 
@@ -242,7 +244,7 @@ components/
 
   field/
     SpectralTracerLayer.tsx
-      one WebGL2 context + four tracer passes + obstacle mask
+      z-3/z-20 WebGL2 canvases + two passes per canvas + obstacle mask
 
     spectralField.ts
       shared frequencies + R2 parameters + CPU/GLSL spectral-family sampling
@@ -254,7 +256,7 @@ components/
 
 - 不存在旧 crop、visible intervals、`orbitTime` 或区间重调度；
 - CPU species 与 GPU tracer 共用相同的谱族常量；
-- tracer renderer 只有一个 WebGL2 context；
+- tracer renderer 只有后景与前景两个 WebGL2 context，分别位于 UI 下方和上方；
 - Canvas2D 不再绘制前景 tracer；
 - obstacle 只进入视觉 mask；
 - Q0–Q5 与本文件一致。
@@ -268,7 +270,7 @@ one spectrum
 + one global clock
 + one spatially parameterized orbit family
 + many correlated tracers
-+ one WebGL renderer
++ two synchronized WebGL layer renderers
 ```
 
 页面不是覆盖了一层随机粒子动画，而是处在同一个有结构的数学场中。

@@ -44,7 +44,8 @@ export type SpectralTracerController = {
 }
 
 type SpectralTracerLayerProps = {
-  fieldCanvasRef: RefObject<HTMLCanvasElement | null>
+  backCanvasRef: RefObject<HTMLCanvasElement | null>
+  frontCanvasRef: RefObject<HTMLCanvasElement | null>
   interactionCanvasRef: RefObject<HTMLCanvasElement | null>
 }
 
@@ -224,9 +225,12 @@ function createProgram(gl: WebGL2RenderingContext) {
   return program
 }
 
-export function createSpectralTracerController(
+function createLayerRenderer(
   canvas: HTMLCanvasElement,
-): SpectralTracerController | null {
+  parameterOffset: number,
+  capacity: number,
+  layer: 0 | 1,
+) {
   const gl = canvas.getContext("webgl2", {
     alpha: true,
     antialias: true,
@@ -246,14 +250,15 @@ export function createSpectralTracerController(
     return null
   }
 
-  const stateData = new Float32Array(SPECTRAL_TRACER_CAPACITY * STATE_COMPONENTS)
-  for (let index = 0; index < SPECTRAL_TRACER_CAPACITY; index++) {
-    const parameter = spectralParameterAt(index)
+  const stateData = new Float32Array(capacity * STATE_COMPONENTS)
+  for (let index = 0; index < capacity; index++) {
+    const parameterIndex = parameterOffset + index
+    const parameter = spectralParameterAt(parameterIndex)
     const offset = index * STATE_COMPONENTS
     stateData[offset] = parameter.u
     stateData[offset + 1] = parameter.v
     stateData[offset + 2] = 1
-    stateData[offset + 3] = hash(index + 1, 41)
+    stateData[offset + 3] = hash(parameterIndex + 1, 41)
   }
 
   gl.bindVertexArray(vertexArray)
@@ -304,11 +309,7 @@ export function createSpectralTracerController(
     gl.clear(gl.COLOR_BUFFER_BIT)
     if (alpha <= 0.001) return
 
-    const backCount = Math.min(backgroundCount, SPECTRAL_TRACER_CAPACITY)
-    const frontCount = Math.min(
-      foregroundCount,
-      Math.max(0, SPECTRAL_TRACER_CAPACITY - SPECTRAL_TRACER_BACKGROUND),
-    )
+    const count = Math.min(layer === 0 ? backgroundCount : foregroundCount, capacity)
     const segments = Math.max(1, Math.min(MAX_TRAIL_SEGMENTS, trailSamples - 1))
     const obstacleData = new Float32Array(SPECTRAL_TRACER_MAX_OBSTACLES * 4)
     obstacles.slice(0, SPECTRAL_TRACER_MAX_OBSTACLES).forEach((obstacle, index) => {
@@ -328,27 +329,16 @@ export function createSpectralTracerController(
     gl.uniform1i(uniforms.obstacleCount, Math.min(obstacles.length, SPECTRAL_TRACER_MAX_OBSTACLES))
     gl.bindVertexArray(vertexArray)
 
-    const drawPass = (offset: number, count: number, layer: number, glow: number) => {
+    const drawPass = (glow: number) => {
       if (count <= 0) return
-      gl.bindBuffer(gl.ARRAY_BUFFER, stateBuffer)
-      gl.vertexAttribPointer(
-        0,
-        STATE_COMPONENTS,
-        gl.FLOAT,
-        false,
-        0,
-        offset * STATE_COMPONENTS * Float32Array.BYTES_PER_ELEMENT,
-      )
       gl.uniform1f(uniforms.layer, layer)
       gl.uniform1f(uniforms.glow, glow)
       gl.blendFunc(gl.SRC_ALPHA, glow > 0.5 ? gl.ONE : gl.ONE_MINUS_SRC_ALPHA)
       gl.drawArraysInstanced(gl.TRIANGLES, 0, segments * 6, count)
     }
 
-    drawPass(0, backCount, 0, 1)
-    drawPass(0, backCount, 0, 0)
-    drawPass(SPECTRAL_TRACER_BACKGROUND, frontCount, 1, 1)
-    drawPass(SPECTRAL_TRACER_BACKGROUND, frontCount, 1, 0)
+    drawPass(1)
+    drawPass(0)
     gl.bindVertexArray(null)
   }
 
@@ -362,16 +352,57 @@ export function createSpectralTracerController(
   return { resize, render, destroy }
 }
 
+export function createSpectralTracerController(
+  backCanvas: HTMLCanvasElement,
+  frontCanvas: HTMLCanvasElement,
+): SpectralTracerController | null {
+  const backRenderer = createLayerRenderer(backCanvas, 0, SPECTRAL_TRACER_BACKGROUND, 0)
+  const frontCapacity = SPECTRAL_TRACER_CAPACITY - SPECTRAL_TRACER_BACKGROUND
+  const frontRenderer = createLayerRenderer(
+    frontCanvas,
+    SPECTRAL_TRACER_BACKGROUND,
+    frontCapacity,
+    1,
+  )
+  if (!backRenderer || !frontRenderer) {
+    backRenderer?.destroy()
+    frontRenderer?.destroy()
+    return null
+  }
+
+  return {
+    resize: (width, height, pixelRatio) => {
+      backRenderer.resize(width, height, pixelRatio)
+      frontRenderer.resize(width, height, pixelRatio)
+    },
+    render: (frame) => {
+      backRenderer.render(frame)
+      frontRenderer.render(frame)
+    },
+    destroy: () => {
+      backRenderer.destroy()
+      frontRenderer.destroy()
+    },
+  }
+}
+
 export function SpectralTracerLayer({
-  fieldCanvasRef,
+  backCanvasRef,
+  frontCanvasRef,
   interactionCanvasRef,
 }: SpectralTracerLayerProps) {
   return (
     <>
       <canvas
-        ref={fieldCanvasRef}
+        ref={backCanvasRef}
+        className="pointer-events-none fixed inset-0 z-[3] hidden h-full w-full md:block"
+        data-field-layer="back"
+        aria-hidden="true"
+      />
+      <canvas
+        ref={frontCanvasRef}
         className="pointer-events-none fixed inset-0 z-20 hidden h-full w-full md:block"
-        data-field-layer="spectral-field"
+        data-field-layer="front"
         aria-hidden="true"
       />
       <canvas

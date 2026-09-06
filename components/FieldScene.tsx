@@ -144,7 +144,8 @@ function createFireflySprite() {
 
 export default function FieldScene() {
   const speciesCanvasRef = useRef<HTMLCanvasElement>(null)
-  const fieldCanvasRef = useRef<HTMLCanvasElement>(null)
+  const backCanvasRef = useRef<HTMLCanvasElement>(null)
+  const frontCanvasRef = useRef<HTMLCanvasElement>(null)
   const interactionCanvasRef = useRef<HTMLCanvasElement>(null)
   const { isDark } = useTheme()
   const { performanceMode } = useFieldMode()
@@ -162,9 +163,10 @@ export default function FieldScene() {
 
   useEffect(() => {
     const speciesCanvas = speciesCanvasRef.current
-    const fieldCanvas = fieldCanvasRef.current
+    const backCanvas = backCanvasRef.current
+    const frontCanvas = frontCanvasRef.current
     const interactionCanvas = interactionCanvasRef.current
-    if (!speciesCanvas || !fieldCanvas || !interactionCanvas) return
+    if (!speciesCanvas || !backCanvas || !frontCanvas || !interactionCanvas) return
 
     const speciesContext = speciesCanvas.getContext("2d", { alpha: true })
     const interactionContext = interactionCanvas.getContext("2d", { alpha: true })
@@ -505,7 +507,7 @@ export default function FieldScene() {
       drawSpecies(time, spectralTime, quality.modeCount)
 
       if (fieldBlend > 0.001 && !tracerController) {
-        tracerController = createSpectralTracerController(fieldCanvas)
+        tracerController = createSpectralTracerController(backCanvas, frontCanvas)
         tracerController?.resize(
           width,
           height,
@@ -564,7 +566,8 @@ export default function FieldScene() {
       stopAnimation()
       if (!desktopQuery.matches) {
         speciesCanvas.width = 1
-        fieldCanvas.width = 1
+        backCanvas.width = 1
+        frontCanvas.width = 1
         interactionCanvas.width = 1
         return
       }
@@ -631,7 +634,8 @@ export default function FieldScene() {
         aria-hidden="true"
       />
       <SpectralTracerLayer
-        fieldCanvasRef={fieldCanvasRef}
+        backCanvasRef={backCanvasRef}
+        frontCanvasRef={frontCanvasRef}
         interactionCanvasRef={interactionCanvasRef}
       />
     </>
