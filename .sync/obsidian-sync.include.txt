@@ -179,3 +179,4 @@ misc/修gudhi非对称bug杂记.md
 misc/CNN验证码识别杂记.md
 math/一致有界原理.md
 math/Calderón–Zygmund 定理.md
+misc/如何读一篇论文.md
